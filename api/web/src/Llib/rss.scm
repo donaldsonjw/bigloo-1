@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/api/web/src/Llib/rss.scm             */
+;*    serrano/prgm/project/bigloo/bigloo/api/web/src/Llib/rss.scm      */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue May 17 08:12:41 2005                          */
-;*    Last change :  Tue Feb 21 07:19:37 2012 (serrano)                */
-;*    Copyright   :  2005-12 Manuel Serrano                            */
+;*    Last change :  Fri Sep  7 11:11:31 2018 (serrano)                */
+;*    Copyright   :  2005-18 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    RSS parsing                                                      */
 ;*=====================================================================*/
@@ -91,6 +91,25 @@
 		    (string->symbol (substring s (+fx l 1) (string-length s)))
 		    e))
 	     e))
+
+      (define (decode-image img)
+	 (append-map (lambda (prop)
+			(if (pair? prop)
+			    (filter-map (match-lambda
+					   ((?key () (?val))
+					    (cons key val))
+					   (else
+					    #f))
+			       prop)
+			    '()))
+	    img))
+
+      (define (flatten l)
+	 (append-map (lambda (l)
+			(if (pair? l)
+			    (filter pair? l)
+			    '()))
+	    l))
       
       (define (channel attr body)
 	 (let ((title #f)
@@ -112,16 +131,16 @@
 				(set! desc (cdata-decode t)))
 			       ((link () (?href) . ?-)
 				(push! links
-				       `(alternate
-					 (href . ,(cdata-decode href))
-					 (title . ,title)
-					 (type . ,#f))))
+				   `(alternate
+				       (href . ,(cdata-decode href))
+				       (title . ,title)
+				       (type . ,#f))))
 			       ((link (??- (href . ?href) ??-) . ?-)
 				(push! links
-				       `(alternate
-					 (href . ,(cdata-decode href))
-					 (title . ,title)
-					 (type . ,#f))))
+				   `(alternate
+				       (href . ,(cdata-decode href))
+				       (title . ,title)
+				       (type . ,#f))))
 			       (((or category dc:subject) ?- ?cat . ?-)
 				(push! cat (cdata-decode cat)))
 			       (((or copyright dc:rights) ?- ?r . ?-)
@@ -130,22 +149,33 @@
 			       (((or lastBuildDate pubDate) ?- (?d) . ?-)
 				(let* ((d0 (cdata-decode d))
 				       (d (date->w3c-datetime
-					   (rfc2822-date->date d0))))
+					     (rfc2822-date->date d0))))
 				   (when (or (not modified)
 					     (>fx (string-compare3 modified d)
-						  0))
+						0))
 				      (set! modified d))))
 			       ((dc:date ?- (?dt . ?-) . ?-)
 				(let ((d dt))
 				   (when (or (not modified)
 					     (>fx (string-compare3 modified d)
-						  0))
+						0))
 				      (set! modified d))))
 			       ((item ?a ?b . ?-)
 				;; Only for RSS 2.0
 				(push! items (item a b)))
+			       ((image . ?img)
+				(set! rest
+				   (cons* :image (decode-image img) rest)))
+			       ((language . ?lang)
+				(set! rest
+				   (cons* language:
+				      (car (apply append lang))
+				      rest)))
 			       (else
-				(push! rest e)))))
+				(set! rest
+				   (cons* (symbol->keyword (car e))
+				      (apply append (cddr e))
+				      rest))))))
 		      body)
 	    
 	    ;; attributes are read last so the title is already known
@@ -162,7 +192,7 @@
 					    (type ,"application/rss+xml")))))
 			       (else #f))))
 		      attr)
-	    
+
 	    (let ((chan (apply make-channel
 			       :title title
 			       :links links
@@ -187,7 +217,7 @@
 			      "items in channel element"
 			      items))))))
       
-      (define (rss-enclosure attr)
+      (define (rss-enclosure attr title)
 	 (let ((href #f)
 	       (type #f)
 	       (length #f))
@@ -201,9 +231,11 @@
 			       ((length)
 				(set! length (cdata-decode (cdr e)))))))
 		      attr)
-	    `(enclosure (href . ,href)
-			(type . ,type)
-			(length . ,length))))
+	    `(enclosure
+		(href . ,href)
+		(type . ,type)
+		(length . ,length)
+		(title . ,title))))
       
       
       (define (item attr body)
@@ -232,27 +264,26 @@
 			       ((link)
 				(when (pair? (caddr e))
 				   (push! links
-				      `(alternate (href . ,(cdata-decode
-							      (caaddr e)))
+				      `(alternate
+					  (href . ,(cdata-decode (caaddr e)))
 					  (title . ,title)
 					  (type . ,#f)))))
 			       ((enclosure)
-				(let ((lnk (rss-enclosure (cadr e))))
-				   (push! links (if title
-						    (append lnk
-							    (cons 'title title))
-						    lnk))))
+				(let ((lnk (rss-enclosure (cadr e) title)))
+				   (push! links lnk)))
 			       ((description dc:description)
 				(set! summary (cdata-decode (caddr e))))
 			       ((content content:encoded)
 				(set! content (cdata-decode (caddr e))))
 			       ((pubDate)
-				(let ((pd (date->w3c-datetime
-					   (rfc2822-date->date
-					    (cdata-decode (caaddr e))))))
-				   (when (or (not date)
-					     (> (string-compare3 date pd) 0))
-				      (set! date pd))))
+				(match-case e
+				   ((?- ?- (?dt))
+				    (let ((pd (date->w3c-datetime
+						 (rfc2822-date->date
+						    (cdata-decode dt)))))
+				       (when (or (not date)
+						 (> (string-compare3 date pd) 0))
+					  (set! date pd))))))
 			       ((dc:date)
 				(let ((d (cdata-decode (caaddr e))))
 				   (when (or (not date)
@@ -266,10 +297,16 @@
 						  (car uri))))))
 			       ((dc:rights copyright)
 				(set! rights (cdata-decode (caddr e))))
+			       ((media:content)
+				(set! rest
+				   (cons* content: (flatten (cdr e)) rest)))
 			       (else
-				(push! rest e)))))
+				(set! rest
+				   (cons* (symbol->keyword (car e))
+				      (apply append (cddr e))
+				      rest))))))
 		      body)
-	    
+
 	    (apply make-item
 		   :title title
 		   :links links
