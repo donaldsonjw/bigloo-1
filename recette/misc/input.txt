@@ -100,8 +100,6 @@ toto_n_est_pas_content
 
 #\040
 
-#\a032
-
 #\x0020
 
 toto
