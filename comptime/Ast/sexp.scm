@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri May 31 15:05:39 1996                          */
-;*    Last change :  Thu Aug 30 11:53:21 2018 (serrano)                */
+;*    Last change :  Mon Sep 24 14:53:29 2018 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    We build an `ast node' from a `sexp'                             */
 ;*---------------------------------------------------------------------*/
@@ -44,7 +44,7 @@
 	    ast_private
 	    ast_object
 	    ast_dump
-;* 	    patch_patch                                                */
+	    ast_ident
 	    effect_feffect)
    
    (export  (if-sym)
@@ -218,15 +218,6 @@
 		  (error-sexp->node "Illegal `quote' expression" exp loc)))))
           (else
 	   (error-sexp->node "Illegal `quote' expression" exp loc))))
-;* {*--- patch -----------------------------------------------------------*} */
-;*       ((patch . ?-)                                                 */
-;*        (if *patch-support*                                          */
-;* 	   (patch->sexp exp stack (find-location/loc exp loc) site)    */
-;* 	   (call->node exp stack loc site)))                           */
-;*       ((patch-index . ?-)                                           */
-;*        (if *patch-support*                                          */
-;* 	   (patch-index->sexp exp stack (find-location/loc exp loc) site) */
-;* 	   (call->node exp stack loc site)))                           */
 ;*--- begin -----------------------------------------------------------*/
       ((begin)
        (sexp->node #unspecified stack (find-location/loc exp loc) site))
@@ -244,45 +235,45 @@
       (((or if (? if-sym?)) . ?-)
        (match-case exp
           ((?- ?si ?alors ?sinon)
-           (match-case si
-              ((or (if ?si #f #t) ((kwote not) ?si))
-	       (set-car! (cdr exp) si)
-	       (set-car! (cddr exp) sinon)
-	       (set-car! (cdddr exp) alors)
-	       (sexp->node exp stack loc site))
-              (else
-	       (let* ((loc (find-location/loc exp loc))
-		      (cdloc (find-location/loc (cdr exp) loc))
-		      (cddloc (find-location/loc (cddr exp) loc))
-		      (cdddloc (find-location/loc (cdddr exp) loc))
-		      (l-si (find-location/loc si cdloc))
-		      (l-alors (find-location/loc alors cddloc))
-		      (l-sinon (find-location/loc sinon cdddloc))
-		      (test (sexp->node si stack loc 'test)))
-		  (cond
-		     ((atom? test)
-		      (with-access::atom test (value)
-			 (if (not value)
-			     (sexp->node sinon stack l-sinon 'value)
-			     (sexp->node alors stack l-alors 'value))))
-		     ((kwote? test)
-		      (sexp->node alors stack l-alors 'value))
-		     ((var? test)
-		      (let ((alors (sexp->node alors stack l-alors 'value))
-			    (sinon (sexp->node sinon stack l-sinon 'value)))
-			 (instantiate::conditional
-			    (loc loc)
-			    (type *_*)
-			    (test test)
-			    (true alors)
-			    (false sinon))))
-		     (else
-		      (let* ((v (mark-symbol-non-user! (gensym 'test)))
-			     (var (make-typed-ident v 'bool))
-			     (nexp (epairify-rec `(if ,v ,alors ,sinon) exp)))
-			 (replace! exp `(,(let-sym) ((,var ,si)) ,nexp))
-			 (sexp->node exp stack loc site))))))))
-          ((?- ?si ?alors)
+	   (let ((nt (not-test si)))
+	      (if nt
+		  (begin
+		     (set-car! (cdr exp) nt)
+		     (set-car! (cddr exp) sinon)
+		     (set-car! (cdddr exp) alors)
+		     (sexp->node exp stack loc site))
+		  (let* ((loc (find-location/loc exp loc))
+			 (cdloc (find-location/loc (cdr exp) loc))
+			 (cddloc (find-location/loc (cddr exp) loc))
+			 (cdddloc (find-location/loc (cdddr exp) loc))
+			 (l-si (find-location/loc si cdloc))
+			 (l-alors (find-location/loc alors cddloc))
+			 (l-sinon (find-location/loc sinon cdddloc))
+			 (test (sexp->node si stack loc 'test)))
+		     (cond
+			((atom? test)
+			 (with-access::atom test (value)
+			    (if (not value)
+				(sexp->node sinon stack l-sinon 'value)
+				(sexp->node alors stack l-alors 'value))))
+			((kwote? test)
+			 (sexp->node alors stack l-alors 'value))
+			((var? test)
+			 (let ((alors (sexp->node alors stack l-alors 'value))
+			       (sinon (sexp->node sinon stack l-sinon 'value)))
+			    (instantiate::conditional
+			       (loc loc)
+			       (type *_*)
+			       (test test)
+			       (true alors)
+			       (false sinon))))
+			(else
+			 (let* ((v (mark-symbol-non-user! (gensym 'test)))
+				(var (make-typed-ident v 'bool))
+				(nexp (epairify-rec `(if ,v ,alors ,sinon) exp)))
+			    (replace! exp `(,(let-sym) ((,var ,si)) ,nexp))
+			    (sexp->node exp stack loc site))))))))
+	  ((?- ?si ?alors)
            (set-cdr! (cddr exp) (list #unspecified))
            (sexp->node exp stack loc site))
           (else
@@ -348,7 +339,29 @@
 	      (nexp `(,(car let-part) ,(cadr let-part) (,body ,@args))))
 	  (sexp->node nexp stack loc site)))
 ;*--- let & letrec ----------------------------------------------------*/
-      (((or let (? let-sym?) letrec) . ?-)
+;*       (((or let (? let-sym?) letrec)                                */
+;* 	((and ?binding (?var ?expr)))                                  */
+;* 	(and ?body (if (and (? symbol?) ?id) ?then ?otherwise)))       */
+;*        (if (not (eq? (id-of-id var loc) id))                        */
+;* 	   (let->node exp stack loc 'value)                            */
+;* 		  (let->node exp stack loc 'value)))                   */
+      (((or let (? let-sym?) letrec) ?bindings . ?expr)
+       (when (and (pair? bindings) (null? (cdr bindings))
+		  (and (pair? expr) (null? (cdr expr))))
+	  (match-case exp
+	     ((?- ((?var ?expr)) (if (and (? symbol?) ?id) ?then ?otherwise))
+	      ;; (let ((v1 (not e1))) (if v1 then else))
+	      ;;   =>
+	      ;; (let ((v1 e1)) (if v1 else then))
+	      (let ((nt (not-test expr)))
+		 (when (and nt
+			    (not (used-in? id otherwise))
+			    (not (used-in? id then)))
+		    (let ((binding (car bindings))
+			  (body (caddr exp)))
+		       (set-car! (cdr binding) nt)
+		       (set-car! (cddr body) otherwise)
+		       (set-car! (cdddr body) then)))))))
        (let->node exp stack loc 'value))
       ((letrec* . ?-)
        (letrec*->node exp stack loc 'value))
@@ -790,4 +803,35 @@
 	  (replace! exp `(,(let-sym) ((,var ,mutex)) ,nexp))
 	  (sexp->node exp stack loc site))))
 	     
+;*---------------------------------------------------------------------*/
+;*    not-test ...                                                     */
+;*    -------------------------------------------------------------    */
+;*    When the test is a negation, returns a new inverted tests.       */
+;*    Returns #f otherwise.                                            */
+;*---------------------------------------------------------------------*/
+(define (not-test test)   
+   (match-case test
+      ((if ?ntest #f #t)
+       ntest)
+      (((kwote not) ?ntest)
+       ntest)
+      ((let ?bindings ?expr)
+       (let ((nt (not-test expr)))
+	  (when nt
+	     (epairify-rec `(let ,bindings ,nt) test))))
+      (else
+       #f)))
    
+;*---------------------------------------------------------------------*/
+;*    used-in? ...                                                     */
+;*    -------------------------------------------------------------    */
+;*    A rough approximation of "does the variable ID used in EXPR?".   */
+;*---------------------------------------------------------------------*/
+(define (used-in? id expr)
+   (cond
+      ((eq? id expr) #t)
+      ((not (pair? expr)) #f)
+      ((eq? (car expr) 'quote) #f)
+      ((not (list? expr)) #f)
+      ((find (lambda (e) (used-in? id e)) expr) #t)
+      (else #f)))
