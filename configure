@@ -4,8 +4,8 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Tue Jan 25 16:05:10 1994                          */
-#*    Last change :  Tue Dec 18 14:31:37 2018 (serrano)                */
-#*    Copyright   :  1994-2018 Manuel Serrano, see LICENSE file        */
+#*    Last change :  Tue Jan 29 08:14:39 2019 (serrano)                */
+#*    Copyright   :  1994-2019 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The Bigloo configuration file                                    */
 #*    -------------------------------------------------------------    */
@@ -163,7 +163,7 @@ unistringsrc=$UNISTRINGSRC
 unistringconfigureopt=
 
 if [ "$unistringsrc " = " " ]; then
-  unistringversion=0.9.7
+  unistringversion=0.9.10
   unistringsrc=libunistring/libunistring-$unistringversion.tgz
 fi  
 
@@ -268,7 +268,8 @@ customgc=yes
 #gccustom=gc-7.3alpha2
 #gccustom=gc-7.3alpha3-20130330
 #gccustom=gc-7.5.0-27may2016
-gccustom=gc-7.6.2
+#gccustom=gc-7.6.2
+gccustom=gc-8.0.2
 gcversion=
 gcbump=0
 cgcflags=
@@ -2615,7 +2616,7 @@ fi
 #*---------------------------------------------------------------------*/
 # find out the C library for phidget
 if [ "$phidget " = " " ]; then
-   phidgetlibs=`$autoconf phidget --cflags="$phidgetcflags" --version=$phidgetversion`
+   phidgetlibs=`$autoconf phidget --cflags="$phidgetcflags" --version=$phidgetversion` 2> /dev/null
 
    if [ "$?" != "0" ]; then
       phidget=no;
