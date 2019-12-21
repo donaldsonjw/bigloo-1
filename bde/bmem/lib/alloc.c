@@ -3,7 +3,7 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Sun Apr 13 06:42:57 2003                          */
-/*    Last change :  Mon Jul  8 11:36:35 2019 (serrano)                */
+/*    Last change :  Mon Dec  9 13:03:44 2019 (serrano)                */
 /*    Copyright   :  2003-19 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Allocation replacement routines                                  */
@@ -16,6 +16,7 @@
 #include <string.h>
 
 extern void gc_alloc_size_add( int size );
+extern int bmem_verbose;
 
 /*---------------------------------------------------------------------*/
 /*    static pa_pair_t *                                               */
@@ -33,11 +34,11 @@ unsigned long ante_bgl_init_dsz = 0;
    { long __idx = bmem_thread ?			 \
       (long)____pthread_getspecific( bmem_key3 ) \
       : alloc_index; \
-      ((__idx < 0 || __idx >= 5) ? (fprintf( stderr, "*** bmem: stack overflow/underflow \"%s\" [%d]\n", name, __idx ), exit( -2 )) : 0)
+      ((__idx < 0 || __idx >= 5) ? (fprintf( stderr, "*** bmem: stack overflow/underflow \"%s\" [%ld]\n", name, __idx ), exit( -2 )) : 0)
 
 #define DBG_INDEX_STOP( name ) \
    (bmem_thread ? (long)____pthread_getspecific( bmem_key3 ) : alloc_index) != (__idx -1) \
-      ? fprintf( stderr, "*** bmem: illegal stack after \"%s\" [%d/%d]\n", name, (bmem_thread ? (long)____pthread_getspecific( bmem_key3 ) : alloc_index), __idx - 1), exit( -1 ) : 0; } 0
+      ? fprintf( stderr, "*** bmem: illegal stack after \"%s\" [%ld/%ld]\n", name, (bmem_thread ? (long)____pthread_getspecific( bmem_key3 ) : alloc_index), __idx - 1), exit( -1 ) : 0; } 0
 
 /*---------------------------------------------------------------------*/
 /*    char *                                                           */
@@ -899,14 +900,18 @@ BGl_registerzd2classz12zc0zz__objectz00( obj_t name, obj_t module, obj_t super,
    obj_t class;
 
    if( !init ) {
-      fprintf( stderr, "Defining classes...\n" );
+      if( bmem_verbose >= 1 ) {
+	 fprintf( stderr, "Defining classes...\n" );
+      }
       init = 1;
    }
 
-   fprintf( stderr, "  %s@%s (%d)...",
-	    cname,
-	    BSTRING_TO_STRING( SYMBOL_TO_STRING( module ) ),
-	    tnum );
+   if( bmem_verbose >= 2 ) {
+      fprintf( stderr, "  %s@%s (%d)...",
+	       cname,
+	       BSTRING_TO_STRING( SYMBOL_TO_STRING( module ) ),
+	       tnum );
+   }
 	       
    fflush( stderr );
    declare_type( tnum, cname );
@@ -927,7 +932,9 @@ BGl_registerzd2classz12zc0zz__objectz00( obj_t name, obj_t module, obj_t super,
 			       nil, shrink,
 			       plain, virtual );
 
-   fprintf( stderr, "ok\n" );
+   if( bmem_verbose >= 2 ) {
+      fprintf( stderr, "ok\n" );
+   }
 
    return class;
 }

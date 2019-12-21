@@ -3,7 +3,7 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Sat Mar  5 08:05:01 2016                          */
-/*    Last change :  Mon Mar  4 15:33:24 2019 (serrano)                */
+/*    Last change :  Sat Dec  7 18:56:23 2019 (serrano)                */
 /*    Copyright   :  2016-19 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Bigloo VECTORs                                                   */
@@ -132,11 +132,11 @@ struct bgl_hvector {
 #if( VECTOR_SIZE_TAG_NB_BIT != 0 )
 #   define BGL_VECTOR_SHRINK( v, l ) \
    ((l >= 0 && l < BGL_VLENGTH( v )) ? \
-    VECTOR( v ).length = (l | (VECTOR( v ).length & ~VECTOR_LENGTH_MASK)), v : v)
+    VECTOR( v ).length = (l & ~VECTOR_LENGTH_MASK)), v : v)
 #else
 #   define BGL_VECTOR_SHRINK( v, l ) \
    ((l >= 0 && l < BGL_VLENGTH( v )) ? \
-    VECTOR( v ).length = (l | (VECTOR( v ).length)), v : v)
+    VECTOR( v ).length = (l), v : v)
 #endif
 
 /*---------------------------------------------------------------------*/
@@ -323,6 +323,33 @@ BGL_RUNTIME_DECL obj_t alloc_hvector( int, int, int );
    memmove( (void *)&BGL_F64VREF( target, tstart ), (void *)&BGL_F64VREF( source, sstart ), \
       (ssend - sstart) * 8 )
    
+/*---------------------------------------------------------------------*/
+/*    Vector stack allocation                                          */
+/*---------------------------------------------------------------------*/
+#if( BGL_HAVE_ALLOCA && defined( __GNUC__ ) )
+#  if( !defined( TAG_VECTOR ) )
+#     define BGL_CREATE_STACK_VECTOR( len ) \
+      ({ \
+      obj_t vector; \
+      long byte_size = VECTOR_SIZE + ( (len-1) * OBJ_SIZE ); \
+      vector = alloca( byte_size ); \
+      vector->vector.header = MAKE_HEADER( VECTOR_TYPE, 0 ); \
+      vector->vector.length = len; \
+      BVECTOR( vector ); \
+      })
+#   else
+#     define BGL_CREATE_STACK_VECTOR( len ) \
+      ({ \
+      obj_t vector; \
+      long byte_size = VECTOR_SIZE + ( (len-1) * OBJ_SIZE ); \
+      vector = alloca( byte_size ); \
+      vector->vector.length = len; \
+      BVECTOR( vector ); \
+      })
+#   endif
+#else
+#  define BGL_CREATE_STACK_VECTOR( len ) create_vector( len )
+#endif   
 
 /*---------------------------------------------------------------------*/
 /*    C++                                                              */

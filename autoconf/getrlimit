@@ -1,19 +1,18 @@
 #!/bin/sh
 #*=====================================================================*/
-#*    serrano/prgm/project/bigloo/autoconf/pthreadkill                 */
+#*    serrano/prgm/project/bigloo/bigloo/autoconf/getrlimit            */
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Wed Aug  9 13:27:23 1995                          */
-#*    Last change :  Wed Jul 13 08:56:56 2016 (serrano)                */
+#*    Last change :  Sun Sep 29 08:51:09 2019 (serrano)                */
 #*    -------------------------------------------------------------    */
-#*    Check for the host pthread kill library (Android only).          */
+#*    Check if getrlimit exists. Return 0, 1.                          */
 #*=====================================================================*/
 
 #*---------------------------------------------------------------------*/
 #*    flags                                                            */
 #*---------------------------------------------------------------------*/
 cflags=
-pthreadlibs="-lpthread"
 
 #*---------------------------------------------------------------------*/
 #*    We parse the arguments                                           */
@@ -26,15 +25,11 @@ while : ; do
     --cflags=*|-cflags=*)
       cflags="`echo $1 | sed 's/^[-a-z]*=//'`";;
 
-    --lib=*|-lib=*)
-      pthreadlibs="`echo $1 | sed 's/^[-a-z]*=//'`";;
-
     -*)
       echo "Unknown option \"$1\", ignored" >&2;;
   esac
   shift
 done
-
 
 file=$TMP/actest$USER
 aout=$TMP/Xactest$USER
@@ -42,7 +37,7 @@ aout=$TMP/Xactest$USER
 #*---------------------------------------------------------------------*/
 #*    compile                                                          */
 #*---------------------------------------------------------------------*/
-compile="$CC $cflags $file.c -o $aout $pthreadlibs >/dev/null"
+compile="$CC $cflags $file.c -o $aout >/dev/null"
 
 #*---------------------------------------------------------------------*/
 #*    The test C file                                                  */
@@ -52,15 +47,22 @@ if( test -f $file.c ); then
 fi
 
 #*---------------------------------------------------------------------*/
-#*    pthread_kill                                                            */
+#*    Test                                                             */
 #*---------------------------------------------------------------------*/
 cat > $file.c <<EOF
-#include <pthread.h>
-#include <bits/sigthread.h>
 #include <stdio.h>
+#include <sys/resource.h>
+
+long getstklimit() {
+   struct rlimit rlimit;
+
+   getrlimit( RLIMIT_STACK, &rlimit );
+
+   return rlimit.rlim_cur;
+}
 
 int main( int argc, char *argv[] ) {
-   fprintf( stderr, "%p", &pthread_kill );
+   fprintf( stderr, "%d\n", getstklimit() );
 }
 EOF
 
@@ -68,62 +70,12 @@ EOF
 #*    Compilation test                                                 */
 #*---------------------------------------------------------------------*/
 if eval "$BUILDSH $compile"; then
-   echo "PTHREAD_KILL"
    \rm -f $file.*
-   \rm -f $aout
-   \rm -f $aout*
-
-   exit 0
-fi
-
-#*---------------------------------------------------------------------*/
-#*    tkill                                                            */
-#*---------------------------------------------------------------------*/
-cat > $file.c <<EOF
-#include <pthread.h>
-#include <stdio.h>
-
-extern int tkill(int tid, int sig);
-
-int main( int argc, char *argv[] ) {
-   fprintf( stderr, "%p", &tkill );
-}
-EOF
-
-#*---------------------------------------------------------------------*/
-#*    Compilation test                                                 */
-#*---------------------------------------------------------------------*/
-if eval "$BUILDSH $compile"; then
-   echo "TKILL"
-   \rm -f $file.*
-   \rm -f $aout
-   \rm -f $aout*
-
-   exit 0
-fi
-
-#*---------------------------------------------------------------------*/
-#*    tgkill                                                           */
-#*---------------------------------------------------------------------*/
-cat > $file.c <<EOF
-#include <pthread.h>
-#include <stdio.h>
-
-extern int tgkill(int tgid, int tid, int sig);
-
-int main( int argc, char *argv[] ) {
-   fprintf( stderr, "%p", &tgkill );
-}
-EOF
-
-if eval "$BUILDSH $compile"; then
-   echo "TGKILL"
+   rm -f $aout
+   rm -f $aout*
+   echo 1
 else
-   echo "PTHREAD_KILL"
+   echo 0
 fi
-
-\rm -f $file.*
-\rm -f $aout
-\rm -f $aout*
 
 exit 0

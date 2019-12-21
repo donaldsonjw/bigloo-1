@@ -3,7 +3,7 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Thu Jun 19 20:48:50 1997                          */
-#*    Last change :  Thu Sep 12 14:08:23 2019 (serrano)                */
+#*    Last change :  Tue Dec 10 07:33:51 2019 (serrano)                */
 #*    Copyright   :  1997-2019 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The global autoconf Makefile.                                    */
@@ -36,7 +36,7 @@ POPULATION	= Makefile bigloo.sh.in bglafile.sh.in bglmco.sh.in \
                   ascpp getwd ranlib unix dirname \
                   bcopy indent setjmp setjmp.sparc winreg \
                   bigendian ldshare ldpreload ldsoname sigprocmask \
-                  sigchld sigaction \
+                  sigchld sigaction siginfo \
                   doubleprec xemacspath ldstaticopt ldsharedopt \
                   readline ldextraopt \
                   socket getaddrinfo getifaddrs gethwaddrs socklen setsockopt \
@@ -61,10 +61,11 @@ POPULATION	= Makefile bigloo.sh.in bglafile.sh.in bglmco.sh.in \
                   alsa pulseaudio mpg123 flac pcre pcrefreestudy avahi \
                   dbus gmp resolv resolvsym unistring limbs signbit rdynamic \
                   getuid getgid gecos getprotoent machdep arflags mixer \
-                  gcconfigureopt ccfortify environ setenv symlink \
+                  config.guess ccfortify environ setenv symlink \
                   androidmkdir bgl-pkg-config phidget phidgetlibdir \
                   gmtoff libuv getgroups ioctl pthreadkill syslog overflow \
-                  semaphore lockf patch likely gccattrs
+                  semaphore lockf patch likely gccattrs getrlimit \
+                  c99stackalloc
 
 #*---------------------------------------------------------------------*/
 #*    pop ...                                                          */
