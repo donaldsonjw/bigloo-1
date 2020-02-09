@@ -3,8 +3,8 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Sun Apr 13 06:28:06 2003                          */
-/*    Last change :  Thu Oct 10 08:46:18 2019 (serrano)                */
-/*    Copyright   :  2003-19 Manuel Serrano                            */
+/*    Last change :  Fri Jan 10 17:08:01 2020 (serrano)                */
+/*    Copyright   :  2003-20 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Allocation profiling initialization                              */
 /*=====================================================================*/
@@ -24,9 +24,11 @@
 #endif
 
 extern void alloc_dump_statistics( FILE *f );
+extern void alloc_dump_statistics_json( FILE *f );
 extern void alloc_reset_statistics();
 extern void declare_type( int tnum, char *tname );
 extern void GC_dump_statistics( FILE *f );
+extern void GC_dump_statistics_json( FILE *f );
 extern void GC_reset_statistics();
 extern void thread_dump_statistics( FILE *f );
 extern void thread_reset_statistics();
@@ -58,6 +60,7 @@ void *(*____GC_add_gc_hook)( void (*)() ) = 0;
 char **____executable_name = 0;
 void *____command_line = 0;
 void (*____GC_reset_allocated_bytes)() = 0;
+BGL_LONGLONG_T (*____bgl_current_nanoseconds)() = 0;
 
 /* inline allocations */
 void *(*____make_pair)( void *, void * ) = 0;
@@ -285,8 +288,10 @@ get_variable( void *handle, char *id ) {
 static void
 dump_statistics() {
    char *n = getenv( "BMEMMON" );
+   char *fmt = getenv( "BMEMFORMAT" );
    char *e = 0L;
    FILE *f;
+   int bmemdumpfmt = BMEMDUMPFORMAT_SEXP;
 
    if( !n ) {
       if( ____executable_name && *____executable_name ) {
@@ -312,28 +317,52 @@ dump_statistics() {
       }
    }
 
+   if( fmt && !strcmp( fmt, "json" ) ) {
+      bmemdumpfmt = BMEMDUMPFORMAT_JSON;
+      n = "a.json";
+   }
+      
    if( bmem_verbose >= 1 ) {
-      fprintf( stderr, "Dumping file...%s\n", n );
+      fprintf( stderr, "\nDumping file \"%s\"...", n );
+      fflush( stderr );
    }
    
    if( !(f = fopen( n, "w" )) ) {
       FAIL( IDENT, "Can't open output file", n );
    }
-   fprintf( f, ";; size are expressed in work (i.e. 4 bytes)\n" );
-   fprintf( f, "(monitor\n" );
-   fprintf( f, "  (info (exec \"%s\") (sizeof-word %d))\n",
-	    e, BMEMSIZEOFWORD ); 
-   GC_dump_statistics( f );
-   alloc_dump_statistics( f );
-   type_dump( f );
-   thread_dump_statistics( f );
-   fprintf( f, ")\n" );
-   
-   if( bmem_verbose >= 2 ) {
-      fprintf( stderr, "Dump done\n" );
+
+   if( bmemdumpfmt == BMEMDUMPFORMAT_JSON ) {
+      // json dump
+      fprintf( f, "{\"monitor\":\n  { \"info\": { \"exec\": \"%s\", \"version\": \"%s\", \"sizeWord\": %d },\n", e, VERSION, BMEMSIZEOFWORD );
+      GC_dump_statistics_json( f );
+      fprintf( f, "   ,\n" );
+      alloc_dump_statistics_json( f );
+      fprintf( f, "}}\n" );
+   } else {
+      // text dump
+      fprintf( f, ";; sizes are expressed in word (e.g., 4 bytes)\n" );
+      fprintf( f, "(monitor\n" );
+      fprintf( f, "  (info (exec \"%s\") (version \"%s\") (sizeof-word %d))\n",
+	       e, VERSION, BMEMSIZEOFWORD );
+      GC_dump_statistics( f );
+      alloc_dump_statistics( f );
+      type_dump( f );
+      thread_dump_statistics( f );
+      fprintf( f, ")\n" );
    }
+   if( bmem_verbose >= 1 ) {
+      fprintf( stderr, " done\n\n" );
+   }
+   
    fprintf( stderr, "Total size: %lldMB (%lldKB)\n",
 	    GC_alloc_total() / 1024 / 1024, GC_alloc_total() / 1024 );
+   
+   if( bmem_verbose >= 1 ) {
+      fprintf( stderr, "\n(export \"BMEMVERBOSE=0\" to disable bmem messages)\n" );
+      fprintf( stderr, "(export \"BMEMFORMAT=json\" to generate json format)\n" );
+      fflush( stderr );
+      fflush( stdout );
+   }
    fclose( f );
 }
 
@@ -590,6 +619,7 @@ bmem_init_inner() {
    ____GC_malloc_uncollectable = get_function( hdl, "GC_malloc_uncollectable" );
    ____GC_add_gc_hook = get_function( hdl, "GC_add_gc_hook" );
    ____GC_gcollect = (void (*)())get_function( hdl, "GC_gcollect" );
+   
    ____make_pair = get_function( hdl, "make_pair" );
    ____make_cell = get_function( hdl, "make_cell" );
 #if( !BGL_NAN_TAGGING )
@@ -619,6 +649,7 @@ bmem_init_inner() {
    ____get_hash_power_number = (long (*)())get_function( hdl, "get_hash_power_number" );
    ____get_hash_power_number_len = (long (*)())get_function( hdl, "get_hash_power_number_len" );
    ____bgl_get_symtab = get_function( hdl, "bgl_get_symtab" );
+   ____bgl_current_nanoseconds = (BGL_LONGLONG_T (*)())get_function( hdl, "bgl_current_nanoseconds" );
    /* string */
    ____string_to_bstring = get_function( hdl, "string_to_bstring" );
    ____string_to_bstring_len = get_function( hdl, "string_to_bstring_len" );

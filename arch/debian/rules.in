@@ -24,7 +24,8 @@ config.status: configure
 	dh_testdir
 	# Add here commands to configure the package.
 	# CFLAGS="$(CFLAGS) -g" ./configure --prefix=/usr --stack-check=no --debug2
-	CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" ./configure --prefix=@BGLPREFIX@ --stack-check=no --disable-srfi27 --disable-packrat --disable-thread-local-storage --abort-missing @BGLCONFIGUREOPT@
+	#CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)" ./configure --prefix=@BGLPREFIX@ --stack-check=no --disable-srfi27 --disable-packrat --disable-thread-local-storage --abort-missing @BGLCONFIGUREOPT@
+	./configure --prefix=@BGLPREFIX@ --stack-check=no --disable-srfi27 --disable-packrat --disable-thread-local-storage --abort-missing @BGLCONFIGUREOPT@
 
 
 build: build-stamp
@@ -109,7 +110,8 @@ binary-arch: build install
 #	dh_python
 	LD_LIBRARY_PATH=$(LDLIBPATH) dh_makeshlibs
 	dh_installdeb
-	LD_LIBRARY_PATH=$(LDLIBPATH) dh_shlibdeps -X bmem.so
+#	LD_LIBRARY_PATH=$(LDLIBPATH) dh_shlibdeps -X bmem.so
+	dh_shlibdeps -l$(LDLIBPATH) -X bmem.so
 	dh_gencontrol
 	dh_md5sums
 	dh_builddeb

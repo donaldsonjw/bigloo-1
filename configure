@@ -4,8 +4,8 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Tue Jan 25 16:05:10 1994                          */
-#*    Last change :  Wed Dec 11 21:34:21 2019 (serrano)                */
-#*    Copyright   :  1994-2019 Manuel Serrano, see LICENSE file        */
+#*    Last change :  Sat Jan 18 19:44:54 2020 (serrano)                */
+#*    Copyright   :  1994-2020 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The Bigloo configuration file                                    */
 #*    -------------------------------------------------------------    */
@@ -41,7 +41,7 @@ rpath=
 
 #*--- api -------------------------------------------------------------*/
 importantapis="pthread fthread srfi18 ssl sqlite web multimedia mail calendar pkgcomp pkglib text srfi1 crypto openpgp csv upnp libuv"
-apis="$importantapis gstreamer phidget alsa pulseaudio wav flac mpg123 phone avahi srfi27 packrat patch"
+apis="$importantapis gstreamer phidget alsa pulseaudio wav flac mpg123 phone avahi srfi27 packrat"
 
 #*--- bee configuration -----------------------------------------------*/
 bee=partial # "partial" or "full"
@@ -98,6 +98,7 @@ belong_prealloc_min=-10
 belong_prealloc_max=100
 
 bglnantagging=0
+bglsmi=0
 
 #*--- Java back-end user configuration --------------------------------*/
 jvmbackend=no # set to "no" not to install the Jvm back-end
@@ -245,11 +246,6 @@ libuvconfigureopt=
 #* libuvversion=v1.19.2                                                */
 libuvversion=v1.20.3
 
-#*--- patch (left blank for autoconfiguration) ------------------------*/
-patchapi=
-patchlibs=
-patchcflags=
-
 #*--- phidget (left blank for autoconfiguration) ----------------------*/
 phidget=
 phidgetlibs=
@@ -318,6 +314,7 @@ fi
 sharedsuffix=so
 sharedlibraryclosed=yes
 sharedlibrarygcclosed='-l$(GCLIB)-$(RELEASE)'
+sharedlibrarygcfthclosed='-l$(GCLIB)_fth-$(RELEASE)'
 
 #*--- should the compiler be dynamically linked?  ---------------------*/
 # the legal value for that variable is `yes' or `no'
@@ -889,6 +886,9 @@ while : ; do
     --nan-tagging)
       bglnantagging=1;;
       
+    --smi)
+      bglsmi=1;;
+      
     --enable-thread|--enable-threads)
       threadsupport=yes;
       addp=1;
@@ -1201,7 +1201,8 @@ while : ; do
       echo "" >&2;
       echo "Experimental features:"  >&2;
       echo "   --gcbump=[yes|no] (configure the gc for bump allocation)" >&2;
-      echo "   --nan-tagging" >&2;
+      echo "   --nan-tagging (nan-tagging schema)" >&2;
+      echo "   --smi (32 bit wide integers for 64 bit architectures)" >&2;
       echo "" >&2;
       echo "Environment variables:" >&2;
       echo "CC         C compiler command" >&2;
@@ -1364,7 +1365,6 @@ if [ "$action" != "bigloo_config_el" ]; then
   openpgp_is_enabled=no
   gstreamer_is_enabled=no
   libuv_is_enabled=no
-  patch_is_enabled=no
   
   for a in $apis; do
     case $a in
@@ -1382,7 +1382,6 @@ if [ "$action" != "bigloo_config_el" ]; then
       openpgp) openpgp_is_enabled="yes";;
       gstreamer) gstreamer_is_enabled="yes";;
       libuv) libuv_is_enabled="yes";;
-      patch) patch_is_enabled="yes";;
     esac
   done
   
@@ -1585,7 +1584,7 @@ case $hostos in
     cflags="$cflags -DBGL_ANDROID"
     gcspecial=-DIGNORE_DYNAMIC_LOADING;
     # Use the multithreaded libbigloogc to close the other shared libraries
-    sharedlibrarygcclosed='-l$(GCLIB)_fth-$(RELEASE)'
+    sharedlibrarygcclosed=$sharedlibrarygcfthclosed
   
     ;;
 esac
@@ -1689,6 +1688,8 @@ alignment=`$autoconf alignment` || exit 1
 
 if [ "$alignment" = "3" ]; then
   if [ "$bglnantagging " != "0 " ]; then
+    intsize=32
+  elif [ "$bglsmi " != "0 " ]; then
     intsize=32
   else
     intsize=61
@@ -2258,6 +2259,7 @@ if [ "$gmpversion " != "no " ]; then
     libgmpbuildpath="\$(BOOTDIR)/gmp\$(LIBDIR)/\$(FILDIR)"
     lcustomflags="-L$bootdir/gmp$libdir/$fildir $lcustomflags"
     buildlibdir="$bootdir/gmp$libdir/$fildir:$buildlibdir"
+    gmplib=-lgmp
   fi
 fi
 
@@ -2470,7 +2472,7 @@ if [ "$alsa " != "no " ]; then
   alsacflags=`$autoconf bgl-pkg-config --cflags alsa`
   alsalibs="`$autoconf bgl-pkg-config --libs alsa`"
 
-  if [ "$alsacflags " = " " -o "$alsalibs " = " " ]; then
+  if [ "$alsacflags " = " " -a "$alsalibs " = " " ]; then
     alsa="no"
   fi
 fi
@@ -2531,7 +2533,7 @@ if [ "$regexp " = " " ]; then
     if [ "$custompcre " != "yes " ]; then
       pcrelibs=`$autoconf pcre` || exit 1;
       extrapcre=pcre
-      pcreprefix=`pcre-config --prefix`
+      pcreprefix=`pcre-config --prefix 2> /dev/null`
 
       if [ "$? " = "0 " ]; then
 	if [ "$pcreprefix" != "/usr" -a "$pcreprefix" != "/usr/local" ]; then
@@ -2675,19 +2677,6 @@ if [ "$libuv_is_enabled " = "yes " -a "$libuv " = " " ]; then
 
      libuv=`$autoconf libuv --cflags="$libuvcflags" --libs="$libuvlibs"` || exit 1;
   fi
-fi
-
-#*---------------------------------------------------------------------*/
-#*    patch                                                            */
-#*---------------------------------------------------------------------*/
-# find out the C library for patch
-if [ "$patch_is_enabled" = "yes" -a "$patchapi " = " " ]; then
-   patchapi=`$autoconf patch` || exit 1;
-fi
-
-if [ "$patch " != "no " ]; then
-  patchcflags=""
-  patchlibs=""
 fi
 
 #*---------------------------------------------------------------------*/
@@ -3342,6 +3331,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
               -e "s|@INT_BIT_SIZE@|$intsize|" \
               -e "s|@ELONG_BIT_SIZE@|$elongsize|" \
               -e "s|@BGL_NAN_TAGGING@|$bglnantagging|" \
+              -e "s|@BGL_SMI@|$bglsmi|" \
               -e "s|@BGL_ISOC99@|$isoc99|" \
               -e "s|@BGL_HAS_ERRNOH@|$errnoh|" \
               -e "s|@BGL_CCDIV0@|$ccdiv0|" \
@@ -3532,6 +3522,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
 	      -e "s|@FILDIR@|$fildir|" \
 	      -e "s|@EXTRALIBS@|$extralibs $extragclibs|" \
 	      -e "s|@GCLIBS@|$sharedlibrarygcclosed|" \
+	      -e "s|@GCLIBS_FTH@|$sharedlibrarygcfthclosed|" \
 	      -e "s|@GCLIB@|$gclib|" \
 	      -e "s|@SHAREDSUFFIX@|$sharedsuffix|" \
 	      -e "s|@SONAME@|$ldsoname|" \
@@ -3874,10 +3865,12 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
   $echo "EXTRAGCLIBS=$extragclibs" >> $makefile_cfg
   $echo "CUSTOMGC=$gccustom" >> $makefile_cfg
   $echo "GCLIB=$gclib" >> $makefile_cfg
+  $echo "GCLIB_FTH=$gclib_fth" >> $makefile_cfg
   if [ $customgc = "yes" ]; then
      $echo "GCCUSTOM=yes" >> $makefile_cfg
      $echo "GCINCLUDE=-I$""(BOOTDIR)/gc/$""(CUSTOMGC)/include" >> $makefile_cfg
      $echo "GCCLOSELIB=$sharedlibrarygcclosed" >> $makefile_cfg
+     $echo "GCCLOSELIB_FTH=$sharedlibrarygcfthclosed" >> $makefile_cfg
      $echo "GCSTDOBJ=" >> $makefile_cfg
   else
      $echo "GCCUSTOM=no" >> $makefile_cfg
@@ -4418,31 +4411,6 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
     $echo "LIBUVCFLAGS=" >> $makefile_cfg
   fi
 
-  # ALSA
-  if [ "$patch " != "no " ]; then
-    # Patch the code of the PATCH init file
-    $echo ";; automatically generated. Don't edit" > api/patch/src/Misc/patch.init
-    cat api/patch/src/Misc/patch.init.in \
-      | sed -e "s|@PATCHLIBS@|$patchlibs|g" \
-            -e "s|@PATCHCFLAGS@|$patchcflags|g" \
-      >>  api/patch/src/Misc/patch.init
-  else
-    napis=;
-    for a in $apis; do
-       if [ "patch" != $a ]; then
-         if [ "$napis " = " " ]; then
-           napis="$a";
-         else
-           napis="$napis $a";
-         fi
-       fi
-    done
-    apis=$napis;
-    $echo "PATCHAPI=" >> $makefile_cfg
-    $echo "PATCHLIBS=" >> $makefile_cfg
-    $echo "PATCHFLAGS=" >> $makefile_cfg
-  fi
-
   # PHIDGET
   $echo "PHIDGET=$phidget" >> $makefile_cfg
   if [ "$phidget " != "no " ]; then
@@ -4701,17 +4669,19 @@ fi
 #*    Debian scripting                                                 */
 #*---------------------------------------------------------------------*/
 # debian
-deb=arch/debian/makedeb.sh
-rm -f $deb 2> /dev/null
-$echo "#!/bin/sh" > $deb
-$echo "#* Automatically generated file (don't edit) */" >> $deb
+for file in makedeb.sh makedebremote.sh; do
+  deb=arch/debian/$file
+  rm -f $deb 2> /dev/null
+  $echo "#!/bin/sh" > $deb
+  $echo "#* Automatically generated file (don't edit) */" >> $deb
 
-cat $deb.in \
-   | sed -e "s|#!/bin/sh||" \
-         -e "s|@VERSION@|$release|" \
-         -e "s|@APIS@|$apis|" \
-   >> $deb  
-chmod a+rx $deb
+  cat $deb.in \
+     | sed -e "s|#!/bin/sh||" \
+           -e "s|@VERSION@|$release|" \
+           -e "s|@APIS@|$apis|" \
+     >> $deb  
+  chmod a+rx $deb
+done  
 
 #*---------------------------------------------------------------------*/
 #*    Checking missing dependencies                                    */
