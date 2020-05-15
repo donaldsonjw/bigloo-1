@@ -4,6 +4,12 @@ Bigloo Debian Package - 19 jan 2020
 This document explains how to use the `makedeb.sh' script to
 build the Bigloo Debian packages.
 
+This script install the Bigloo version out of a tarball stored in:
+
+   $HOME/prgm/distrib
+
+It uses the currently "configured" Bigloo version.
+
 
 1. Prerequisite
 ---------------
@@ -31,7 +37,7 @@ example:
 3. To build the debian packages on a remote machine via ssh
 -----------------------------------------------------------
   
-  ./makedebremote.sh host -O /tmp/debbigloo.host
+  ./makedebremote.sh [-O targetdir] [host] [user]
   
 Warning! This assumes that bash is available on the remote host
 

@@ -4,7 +4,7 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Wed May 23 05:45:55 2012                          */
-#*    Last change :  Tue Jan 21 10:11:26 2020 (serrano)                */
+#*    Last change :  Thu Mar 26 18:23:06 2020 (serrano)                */
 #*    Copyright   :  2012-20 Manuel Serrano                            */
 #*    -------------------------------------------------------------    */
 #*    Script to build the debian Bigloo packages                       */
@@ -14,7 +14,7 @@
 version=@VERSION@
 minor=
 
-bglprefix=/opt/bigloo
+bglprefix=/opt/hop
 
 repodir=$HOME/prgm/distrib
 basedir=`dirname $0`
@@ -25,16 +25,16 @@ fi
 
 bglconfigureopt=
 
-#* depend=libpcre3                                                    */
-#* builddepend=libpcre3-dev                                           */
 builddepend=
 depend=
-debformat="3.0 (native)"
+debformat="3.0 (quilt)"
 
 fakeroot=fakeroot
-targetdir=$PWD
+targetdir=$PWD/build.bigloo
+sign=
 
-libs="sqlite ssl alsa pulseaudio flac wav mpg123 gstreamer avahi"
+postinstall=yes
+libs="sqlite ssl multimedia alsa pulseaudio flac wav mpg123 gstreamer avahi"
 
 while : ; do
   case $1 in
@@ -67,6 +67,11 @@ while : ; do
     -O)
       shift
       targetdir=$1;;
+    --no-postinstall)
+      shift
+      postinstall=no;;
+    --no-sign)
+      sign=--no-sign;;
     *)
       bglconfigureopt="$1 $bglconfigureopt";;
 
@@ -83,7 +88,7 @@ pkg=bigloo
 maemo=`pkg-config maemo-version --modversion 2> /dev/null`
 if [ $? = 0 ]; then
   debian=maemo`echo $maemo | sed -e "s/[.].*$//"`
-  libs="sqlite ssl alsa pulseaudio gstreamer flac wav avahi mpg123"
+  libs="sqlite ssl multimedia alsa pulseaudio gstreamer flac wav avahi mpg123"
 else
   case `cat /etc/issue | awk '{ print $1 }'` in
     Debian)
@@ -101,25 +106,15 @@ fi
 
 curdir=`pwd`
 
-if [ ! -d $targetdir ]; then
-  mkdir -p $targetdir
-fi
-
+rm -rf $targetdir
+mkdir -p $targetdir
 cd $targetdir
 
-/bin/rm -rf build.$pkg
-mkdir build.$pkg
-cd build.$pkg
-
-tar xfz $repodir/bigloo$version$minor.tar.gz
-mv bigloo$version$minor bigloo-$version
-
-cp $repodir/bigloo$version$minor.tar.gz bigloo_$version.orig.tar.gz
+tar xfz $repodir/bigloo-$version$minor.tar.gz
+cp $repodir/bigloo-$version$minor.tar.gz bigloo-$version.tar.gz
 cd bigloo-$version
 
-dh_make -c gpl -s -e Manuel.Serrano@inria.fr -f ../bigloo-$version.tar.gz <<EOF
-
-EOF
+dh_make -y -c gpl -s -e Manuel.Serrano@inria.fr -f ../bigloo-$version.tar.gz
 
 if [ ! -f $basedir/makedeb.sh ]; then
   echo "ERROR: Cannot find \"$basedir/makedeb.sh\"" >&2 
@@ -128,15 +123,15 @@ if [ ! -f $basedir/makedeb.sh ]; then
 fi
 
 # check which ssl is available
-apt-cache search 'libssl' | grep 0\.9\.8
+apt-cache search 'libssl' | grep 0\.9\.8 > /dev/null 2> /dev/null
 if [ $? = 0 ]; then
   libssldepend=libssl0.9.8
 else
-  apt-cache search 'libssl' | grep 1\.0\.0
+  apt-cache search 'libssl' | grep 1\.0\.0 > /dev/null 2> /dev/null
   if [ $? = 0 ]; then
      libssldepend=libssl1.0.0
   else
-     apt-cache search 'libssl' | grep 1\.1
+     apt-cache search 'libssl' | grep 1\.1 > /dev/null 2> /dev/null
      if [ $? = 0 ]; then
        libssldepend=libssl1.1
      else
@@ -180,7 +175,7 @@ configure() {
 # debian specific configuration
 mkdir -p debian
 
-for p in control rules postinst changelog changelog compat; do
+for p in control rules postinst compat; do
   if [ -f $basedir/$p.in ]; then
     configure $basedir/$p.in debian/$p
   elif [ -f $basedir/$p.$pkg ]; then
@@ -192,14 +187,31 @@ done
 
 chmod a+x debian/rules
 
+# changelog
+cp ChangeLog debian/changelog
+
 mkdir -p debian/source
 echo $debformat > debian/source/format
 
-dpkg-buildpackage -r$fakeroot && 
+dpkg-buildpackage -r$fakeroot $sign
 
-if [ -d $repodir/$debian ]; then
-  cp ../*_"$version""$minor"_*.deb $repodir/$debian
+# install the packages
+if [ "$postinstall " = "yes " ]; then
+  pkgs=`grep Package: debian/control | awk -F: '{print $2}' | tr -d '\n'`
+  arch=`dpkg --print-architecture`
+
+  for p in `echo $pkgs`; do
+    if [ -f $targetdir/${p}_$version-1_$arch.deb ]; then
+      sudo dpkg -i $targetdir/${p}_$version-1_$arch.deb
+    elif [ -f $targetdir/${p}_$version-1_all.deb ]; then
+      sudo dpkg -i $targetdir/${p}_$version-1_all.deb
+    else
+      echo "*** ERROR: cannot find .deb file for package $p"
+      exit 1
+    fi
+  done
 fi
 
 cd $curdir
 
+echo "Done generating .deb files in directory \"$targetdir\""
