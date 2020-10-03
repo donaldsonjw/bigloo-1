@@ -4,7 +4,7 @@
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue Jul  2 13:17:04 1996                          */
 ;*    Last change :  Sun Dec 22 18:23:24 2019 (serrano)                */
-;*    Copyright   :  1996-2019 Manuel Serrano, see LICENSE file        */
+;*    Copyright   :  1996-2020 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The C production code.                                           */
 ;*=====================================================================*/
@@ -581,27 +581,80 @@
 ;*---------------------------------------------------------------------*/
 (define-method (node->cop node::let-var kont inpushexit)
    (trace (cgen 3)
-	  "(node->cop node::let-var kont): " (shape node) #\Newline
-	  "  kont: " kont #\Newline)
+      "(node->cop node::let-var kont): " (shape node) #\Newline
+      "  kont: " kont #\Newline)
+
+   (define (alloca x)
+      (cond
+	 ((and (isa? (cdr x) app)
+	       (app-stackable (cdr x))
+	       (bigloo-config 'have-c99-stack-alloc))
+	  (with-access::app (cdr x) (fun args loc)
+	     (let* ((v (var-variable fun))
+		    (sa (fun-stack-allocator (global-value v))))
+		;; declare the variable for the stack allocation
+		(let* ((id (gensym (variable-id v)))
+		       (decl (let ((d (duplicate::local (car x)
+					 (id id)
+					 (name #f)
+					 (type *obj*))))
+				(set-variable-name! d)
+				d))
+		       (alloc (instantiate::cpragma 
+				 (loc loc)
+				 (format (format (car sa) (variable-name decl)))
+				 (args (map (lambda (a)
+					       (node->cop a *id-kont* inpushexit))
+					  args)))))
+		   ;; adjust the orignal function call
+		   (set! fun (duplicate::var fun
+				(variable (duplicate::global v
+					     (name (cadr sa))))))
+		   (set! args (cons (instantiate::var
+				       (loc loc)
+				       (type *obj*)
+				       (variable decl))
+				 args))
+		   (list alloc)))))
+	 ((and (isa? (cdr x) make-box)
+	       (make-box-stackable (cdr x)))
+	  (with-access::make-box (cdr x) (loc stackable)
+	     (let* ((decl (let ((d (duplicate::local (car x)
+				      (id (gensym 'box))
+				      (name #f)
+				      (type *cell*))))
+			     (set-variable-name! d)
+			     d))
+		    (alloc (instantiate::cpragma 
+			      (loc loc)
+			      (format (format "struct bgl_cell ~a"
+					 (variable-name decl)))
+			      (args '()))))
+		(set! stackable decl)
+		(list alloc))))
+	 (else
+	  '())))
+   
    (with-access::let-var node (body bindings loc)
-      (let ((decls (instantiate::local-var
+      (for-each (lambda (x) (set-variable-name! (car x))) bindings)
+      (let ((alloca (append-map alloca bindings))
+	    (decls (instantiate::local-var
 		      (loc loc)
 		      (vars (map car bindings))))
 	    (sets  (map (lambda (x)
-			   (set-variable-name! (car x))
 			   (node->cop (node-setq (car x) (cdr x))
 			      *stop-kont* inpushexit))
-			bindings))
+		      bindings))
 	    (body  (let ((cop (node->cop body kont inpushexit)))
 		      (instantiate::stop
 			 (value cop)))))
 	 (block-kont
-	  (bdb-let-var
-	   (instantiate::csequence
-	      (loc loc)
-	      (cops (cons decls (append sets (list body)))))
-	   loc)
-	  loc))))
+	    (bdb-let-var
+	       (instantiate::csequence
+		  (loc loc)
+		  (cops (append alloca (cons decls (append sets (list body))))))
+	       loc)
+	    loc))))
 
 ;*---------------------------------------------------------------------*/
 ;*    bdb-let-var ...                                                  */
@@ -796,12 +849,25 @@
    (trace (cgen 3)
 	  "(node->cop node::make-box kont): " (shape node) #\Newline
 	  "  kont: " kont #\Newline)
-   (with-access::make-box node (value loc)
-      (if (or (var? value) (atom? value) (kwote? value))
+   
+   (define (simple-app? value)
+      (when (app? value)
+	 (with-access::app value (fun args)
+	    (when (every simple-expr? args)
+	       (with-access::variable (var-variable fun) (value)
+		  (with-access::fun value (side-effect)
+		     (or (not side-effect))))))))
+
+   (define (simple-expr? value)
+      (or (var? value) (atom? value) (kwote? value) (simple-app? value)))
+   
+   (with-access::make-box node (value loc stackable)
+      (if (simple-expr? value)
 	  (node->cop value
 		     (lambda (v) (kont (instantiate::cmake-box
 					  (loc loc)
-					  (value v))))
+					  (value v)
+					  (stackable stackable))))
 		      inpushexit)
 	  (let* ((aux  (make-local-svar/name 'cellval *obj*))
 		 (cval (node->cop (node-setq aux value) *id-kont* inpushexit)))
@@ -819,7 +885,8 @@
 				    (loc loc)
 				    (value (instantiate::varc
 					      (loc loc)
-					      (variable aux))))))))))))))
+					      (variable aux)))
+				    (stackable stackable))))))))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    node->cop ::box-ref ...                                          */

@@ -3,7 +3,7 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Sun Apr 20 09:34:24 2003                          */
-#*    Last change :  Tue Mar 24 12:51:57 2020 (serrano)                */
+#*    Last change :  Fri May  1 16:08:47 2020 (serrano)                */
 #*    Copyright   :  2003-20 Manuel Serrano                            */
 #*    -------------------------------------------------------------    */
 #*    The makefile to build bmem                                       */
@@ -78,8 +78,8 @@ $(BOOTBINDIR)/$(BMEM_EXE): $(OBJECT)
 #*--- lib -------------------------------------------------------------*/
 lib: $(BOOTLIBDIR)/bmem/bmem_s.$(SHAREDSUFFIX) \
   $(BOOTLIBDIR)/bmem/bmem_u.$(SHAREDSUFFIX) \
-  $(BOOTLIBDIR)/bmem/bmem_fth_s.$(SHAREDSUFFIX) \
-  $(BOOTLIBDIR)/bmem/bmem_fth_u.$(SHAREDSUFFIX)
+  $(BOOTLIBDIR)/bmem/bmem_s_mt.$(SHAREDSUFFIX) \
+  $(BOOTLIBDIR)/bmem/bmem_u_mt.$(SHAREDSUFFIX)
 
 $(BOOTLIBDIR)/bmem/bmem_u.$(SHAREDSUFFIX): $(LIBOBJECT) $(BOOTLIBDIR)/bmem
 	$(MAKE) shared-lib \
@@ -88,6 +88,7 @@ $(BOOTLIBDIR)/bmem/bmem_u.$(SHAREDSUFFIX): $(LIBOBJECT) $(BOOTLIBDIR)/bmem
            LIBDEST=$(BOOTLIBDIR)/bmem/bmem_u.$(SHAREDSUFFIX) \
 	   LIBPATH=$(BOOTLIBDIR) \
            SONAME=bmem_u.$(SHAREDSUFFIX) \
+	   LDOPTS="$(LDOPTS) $(LDBUILDOPTS)" \
            CLOSELIBS="-lbigloo_u-$(RELEASE)"
 
 $(BOOTLIBDIR)/bmem/bmem_s.$(SHAREDSUFFIX): $(LIBOBJECT) $(BOOTLIBDIR)/bmem
@@ -97,25 +98,28 @@ $(BOOTLIBDIR)/bmem/bmem_s.$(SHAREDSUFFIX): $(LIBOBJECT) $(BOOTLIBDIR)/bmem
            LIBDEST=$(BOOTLIBDIR)/bmem/bmem_s.$(SHAREDSUFFIX) \
 	   LIBPATH=$(BOOTLIBDIR) \
            SONAME=bmem_s.$(SHAREDSUFFIX) \
+	   LDOPTS="$(LDOPTS) $(LDBUILDOPTS)" \
            CLOSELIBS="-lbigloo_s-$(RELEASE)"
 
-$(BOOTLIBDIR)/bmem/bmem_fth_u.$(SHAREDSUFFIX): $(LIBOBJECT) $(BOOTLIBDIR)/bmem
+$(BOOTLIBDIR)/bmem/bmem_u_mt.$(SHAREDSUFFIX): $(LIBOBJECT) $(BOOTLIBDIR)/bmem
 	$(MAKE) shared-lib \
 	   OBJECTS="$(LIBOBJECT)" \
            FORCELD=true \
-           LIBDEST=$(BOOTLIBDIR)/bmem/bmem_fth_u.$(SHAREDSUFFIX) \
+           LIBDEST=$(BOOTLIBDIR)/bmem/bmem_u_mt.$(SHAREDSUFFIX) \
 	   LIBPATH=$(BOOTLIBDIR) \
-           SONAME=bmem_fth_u.$(SHAREDSUFFIX) \
-           CLOSELIBS="-lbigloo_u-$(RELEASE)"
+           SONAME=bmem_u_mt.$(SHAREDSUFFIX) \
+	   LDOPTS="$(LDOPTS) $(LDBUILDOPTS)" \
+           CLOSELIBS="-lbigloo_u_mt-$(RELEASE)"
 
-$(BOOTLIBDIR)/bmem/bmem_fth_s.$(SHAREDSUFFIX): $(LIBOBJECT) $(BOOTLIBDIR)/bmem
+$(BOOTLIBDIR)/bmem/bmem_s_mt.$(SHAREDSUFFIX): $(LIBOBJECT) $(BOOTLIBDIR)/bmem
 	$(MAKE) shared-lib \
 	   OBJECTS="$(LIBOBJECT)" \
            FORCELD=true \
-           LIBDEST=$(BOOTLIBDIR)/bmem/bmem_fth_s.$(SHAREDSUFFIX) \
+           LIBDEST=$(BOOTLIBDIR)/bmem/bmem_s_mt.$(SHAREDSUFFIX) \
 	   LIBPATH=$(BOOTLIBDIR) \
-           SONAME=bmem_fth_s.$(SHAREDSUFFIX) \
-           CLOSELIBS="-lbigloo_s-$(RELEASE)"
+           SONAME=bmem_s_mt.$(SHAREDSUFFIX) \
+	   LDOPTS="$(LDOPTS) $(LDBUILDOPTS)" \
+           CLOSELIBS="-lbigloo_s_mt-$(RELEASE)"
 
 #*--- lib/bmem --------------------------------------------------------*/
 $(BOOTLIBDIR)/bmem:
@@ -149,12 +153,12 @@ install:
 	  cp $(BOOTLIBDIR)/bmem/bmem_u.$(SHAREDSUFFIX) \
              $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem_u.$(SHAREDSUFFIX) || exit 1; \
           chmod $(MODEXE) $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem_u.$(SHAREDSUFFIX); \
-	  cp $(BOOTLIBDIR)/bmem/bmem_fth_s.$(SHAREDSUFFIX) \
-             $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem_fth_s.$(SHAREDSUFFIX) || exit 1; \
-          chmod $(MODEXE) $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem_fth_s.$(SHAREDSUFFIX); \
-	  cp $(BOOTLIBDIR)/bmem/bmem_fth_u.$(SHAREDSUFFIX) \
-             $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem_fth_u.$(SHAREDSUFFIX) || exit 1; \
-          chmod $(MODEXE) $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem_fth_u.$(SHAREDSUFFIX); \
+	  cp $(BOOTLIBDIR)/bmem/bmem_s_mt.$(SHAREDSUFFIX) \
+             $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem_s_mt.$(SHAREDSUFFIX) || exit 1; \
+          chmod $(MODEXE) $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem_s_mt.$(SHAREDSUFFIX); \
+	  cp $(BOOTLIBDIR)/bmem/bmem_u_mt.$(SHAREDSUFFIX) \
+             $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem_u_mt.$(SHAREDSUFFIX) || exit 1; \
+          chmod $(MODEXE) $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem_u_mt.$(SHAREDSUFFIX); \
         fi
 	cp etc/bmem.css $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem.css
 	chmod $(MODFILE) $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem.css

@@ -3537,6 +3537,20 @@ public final class foreign
 	 return new bigloo.date(ns, s, min, h, d, mon - 1, y, tz, istz, dst);
       }
 
+   public static date bgl_update_date(date, long ns, int s,
+				      int min, int h, int d, int mon,
+				      int y, int tz, boolean istz, int dst)
+      {
+	 date tmp = bgl_make_date( ns, s, min, h, d, mon,
+				   y, tz, istz, dst);
+
+	 date.nsec = tmp.nsec;
+	 date.calendar = tmp.calendar;
+	 date.timezone = tmp.timezone;
+	 return date;
+      }
+   
+
    public static date bgl_seconds_to_date(long sec)
       {
 	 return new bigloo.date(sec);
@@ -3553,9 +3567,21 @@ public final class foreign
 	 return new bigloo.date(nsec, true);
       }
 
+   public static date bgl_milliseconds_to_date(long nsec)
+      {
+	 return new bigloo.date(nsec, false);
+      }
+
    public static date bgl_seconds_to_utc_date(long sec)
       {
 	 date d = new bigloo.date(sec);
+	 d.calendar.setTimeZone(new SimpleTimeZone(0, "UTC"));
+	 return d;
+      }
+
+   public static date bgl_milliseconds_to_date(long sec)
+      {
+	 date d = new bigloo.date(sec * 1000000, true);
 	 d.calendar.setTimeZone(new SimpleTimeZone(0, "UTC"));
 	 return d;
       }
@@ -3568,6 +3594,11 @@ public final class foreign
    public static long bgl_current_microseconds()
       {
 	 return (new Date().getTime() * 1000);
+      }
+
+   public static long bgl_current_milliseconds()
+      {
+	 return (new Date().getTime());
       }
 
    public static long bgl_current_nanoseconds()
@@ -3583,6 +3614,11 @@ public final class foreign
    public static long bgl_date_to_nanoseconds(date d)
       {
 	 return (d.calendar.getTime().getTime() * 1000000);
+      }
+
+   public static long bgl_date_to_milliseconds(date d)
+      {
+	 return (d.calendar.getTime().getTime() * 1000);
       }
 
    public static byte[] bgl_seconds_to_string(long sec)
@@ -3608,6 +3644,11 @@ public final class foreign
    public static long BGL_DATE_NANOSECOND(date d)
       {
 	 return d.nsec;
+      }
+
+   public static long BGL_DATEMILLISECOND(date d)
+      {
+	 return d.nsec / 1000000;
       }
 
    public static int BGL_DATE_MINUTE(date d)
@@ -6055,6 +6096,10 @@ public final class foreign
    
    public static byte[] BGL_REGEXP_PAT(regexp o) {
       return o.pat;
+   }
+   
+   public static int BGL_REGEXP_CAPTURE_COUNT(regexp o) {
+      return -1;
    }
    
    public static Object BGL_REGEXP_PREG(regexp o) {

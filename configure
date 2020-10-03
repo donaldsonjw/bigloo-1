@@ -4,7 +4,8 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Tue Jan 25 16:05:10 1994                          */
-#*    Last change :  Tue Mar 24 12:20:40 2020 (serrano)                */
+#*    Last change :  Mon May 18 08:43:06 2020 (serrano)                */
+#*    Last change :  Thu May 14 09:43:33 2020 (serrano)                */
 #*    Copyright   :  1994-2020 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The Bigloo configuration file                                    */
@@ -16,7 +17,7 @@
 #*---------------------------------------------------------------------*/
 #*    Bigloo revision number                                           */
 #*---------------------------------------------------------------------*/
-release=4.3h
+release=4.4a
 version=
 bigloourl=http://www-sop.inria.fr/indes/fp/Bigloo
 
@@ -56,6 +57,8 @@ cc=$CC  # left blank for default automatic configuration
 cflags=$CFLAGS
 lflags=$LDFLAGS
 lcustomflags=
+
+cbuildflags=
 
 bigloo=$BIGLOO # used only for cross compiling
 if [ "$BFLAGS " != " " ]; then
@@ -299,6 +302,7 @@ modfile=644
 # set $ldopt to `no-share' if you don't want shared library
 ldopt=
 ldbuildsharedopt=
+ldbuildopt=
 ldrpath=
 
 # set $ldsoname to `blank' if you want to force it empty
@@ -314,6 +318,7 @@ fi
 sharedsuffix=so
 sharedlibraryclosed=yes
 sharedlibrarygcclosed='-l$(GCLIB)-$(RELEASE)'
+sharedlibrarygcmtclosed='-l$(GCLIB)_mt-$(RELEASE)'
 sharedlibrarygcfthclosed='-l$(GCLIB)_fth-$(RELEASE)'
 
 #*--- should the compiler be dynamically linked?  ---------------------*/
@@ -378,7 +383,7 @@ bglpkg=bglpkg
 libraryname=bigloo
 
 #--- additional user library used to link bigloo applications ---------*/
-extralibs="-lm"
+extralibs="-lm -lc"
 extragclibs="-lc"
 
 #*--- custom GC configuration -----------------------------------------*/
@@ -1584,7 +1589,7 @@ case $hostos in
     cflags="$cflags -DBGL_ANDROID"
     gcspecial=-DIGNORE_DYNAMIC_LOADING;
     # Use the multithreaded libbigloogc to close the other shared libraries
-    sharedlibrarygcclosed=$sharedlibrarygcfthclosed
+    sharedlibrarygcclosed=$sharedlibrarygcmtclosed
   
     ;;
 esac
@@ -1812,12 +1817,12 @@ case $hostos in
           pthreadlibs=no
           ldcomplibs="\$(GCCLOSELIB) -lc -lm"
         else
-          customgclib=bigloogc_fth
-	  sharedlibrarygcfthclosed='-l$(GCLIB)-$(RELEASE)'
+#*           customgclib=bigloogc_mt                                   */
+#* 	  sharedlibrarygcfthclosed='-l$(GCLIB)-$(RELEASE)'             */
           extralibs="$extralibs $pthreadlibs"
-	  if [ "$sharedcompiler " = "yes " ]; then
-            ldcomplibs="\$(GCCLOSELIB) $pthreadlibs -lc -lm"
-	  fi
+#* 	  if [ "$sharedcompiler " = "yes " ]; then                     */
+#*             ldcomplibs="\$(GCCLOSELIB) $pthreadlibs -lc -lm"        */
+#* 	  fi                                                           */
         fi
       fi
       if [ `dirname $bindir` != `dirname $libdir` ]; then
@@ -2258,7 +2263,7 @@ if [ "$gmpversion " != "no " ]; then
     (cd gmp; . ./configure-gmp) || exit 1
   
     libgmpbuildpath="\$(BOOTDIR)/gmp\$(LIBDIR)/\$(FILDIR)"
-    lcustomflags="-L$bootdir/gmp$libdir/$fildir $lcustomflags"
+    #lcustomflags="-L$bootdir/gmp$libdir/$fildir $lcustomflags"
     buildlibdir="$bootdir/gmp$libdir/$fildir:$buildlibdir"
     gmplib=-lgmp
   fi
@@ -2563,9 +2568,11 @@ if [ "$regexp " = " " ]; then
       pcrelibs=yes
       extrapcre=pcre
       libpcrebuildpath="\$(BOOTDIR)/pcre\$(LIBDIR)/\$(FILDIR)"
-      lcustomflags="-L$bootdir/pcre$libdir/$fildir $lcustomflags"
+      ldbuildopts="-L$bootdir/pcre$libdir/$fildir $ldbuildopts"
+      #lcustomflags="-L$bootdir/pcre$libdir/$fildir $lcustomflags"
       buildlibdir="$bootdir/pcre$libdir/$fildir:$buildlibdir"
-      cflags="-I$bootdir/pcre$libdir/$fildir $cflags"
+      #cflags="-I$bootdir/pcre$libdir/$fildir $cflags"
+      cbuildflags="-I$bootdir/pcre$libdir/$fildir $cbuildflags"
     else
       pcrelibs=no
     fi
@@ -2612,9 +2619,11 @@ if [ "$unistring " != "no " ]; then
     featureflags="-srfi enable-unistring $featureflags";
     extraunistring=unistring
     libunistringbuildpath="\$(BOOTDIR)/libunistring\$(LIBDIR)/\$(FILDIR)"
-    lcustomflags="-L$bootdir/libunistring$libdir/$fildir $lcustomflags"
+    ldbuildopts="-L$bootdir/libunistring$libdir/$fildir $ldbuildopts"
+    #lcustomflags="-L$bootdir/libunistring$libdir/$fildir $lcustomflags"
     buildlibdir="$bootdir/libunistring$libdir/$fildir:$buildlibdir"
-    cflags="-I$bootdir/libunistring$libdir/$fildir $cflags"
+    #cflags="-I$bootdir/libunistring$libdir/$fildir $cflags"
+    cbuildflags="-I$bootdir/libunistring$libdir/$fildir $cbuildflags"
     unistringversion=`$echo $unistringsrc | sed 's/[^0-9]*//' | sed 's/[.][^0-9]*$//'`
     buildlibunistringlibdir=$bootdir/libunistring/libunistring-$unistringversion/lib/.libs
       
@@ -3067,6 +3076,10 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
   timeval=`$autoconf timeval --cflags="$coflags"` || exit 1
   # The gmtoff field
   gmtoff=`$autoconf gmtoff --cflags="$coflags"` || exit 1
+  # The localtime_r function
+  localtime_r=`$autoconf localtime_r --cflags="$coflags"` || exit 1
+  # The gmtime_r function
+  gmtime_r=`$autoconf gmtime_r --cflags="$coflags"` || exit 1
 
   # The warning C compiler options
   if [ "$cwarningflags" != "no" ]; then
@@ -3405,6 +3418,8 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
               -e "s|@BGL_TIMEZONE@|$timezone|" \
               -e "s|@BGL_HAVE_TIMEVAL@|$timeval|" \
               -e "s|@BGL_HAVE_GMTOFF@|$gmtoff|" \
+              -e "s|@BGL_HAVE_LOCALTIME_R@|$localtime_r|" \
+              -e "s|@BGL_HAVE_GMTIME_R@|$gmtime_r|" \
               -e "s|@HAVE_SHARED_LIBRARY@|$haveshlib|" \
               -e "s|@HAVE_DLOPEN@|$havedlopen|" \
               -e "s|@DLOPEN_LD_OPT@|$dlopen|" \
@@ -3524,6 +3539,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
 	      -e "s|@EXTRALIBS@|$extralibs $extragclibs|" \
 	      -e "s|@GCLIBS@|$sharedlibrarygcclosed|" \
 	      -e "s|@GCLIBS_FTH@|$sharedlibrarygcfthclosed|" \
+	      -e "s|@GCLIBS_MT@|$sharedlibrarygcmtclosed|" \
 	      -e "s|@GCLIB@|$gclib|" \
 	      -e "s|@SHAREDSUFFIX@|$sharedsuffix|" \
 	      -e "s|@SONAME@|$ldsoname|" \
@@ -3532,6 +3548,18 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
         > $p
     fi
   done
+
+  # bigloo.sh adjuments
+  if [ "$ldbuildopts " != " " ]; then
+    cat bigloo.sh | \
+      sed -e "s|@LDBIGLOOOPT@|-ldopt \"$ldbuildopts\"|" \
+	  > bigloo.sh.tmp
+  else
+    cat bigloo.sh | \
+      sed -e "s|@LDBIGLOOOPT@ ||" \
+	  > bigloo.sh.tmp
+  fi
+  mv bigloo.sh.tmp bigloo.sh
 
   # bigloo_h
   cp runtime/Include/`basename $bigloo_h` $bigloo_h
@@ -3853,8 +3881,10 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
   $echo "CFLAGS=$coflags $cflags" >> $makefile_cfg
   $echo "CSTRIPFLAGS=$csflags" >> $makefile_cfg
   $echo "CPICFLAGS=$cpicflags" >> $makefile_cfg
+  $echo "CBUILDFLAGS=$cbuildflags" >> $makefile_cfg
   $echo "CNANFLAGS=$cnanflags" >> $makefile_cfg
   $echo "CFLAGS_P=$""(CFLAGS) $cpflags" >> $makefile_cfg
+  $echo "LDBUILDOPTS=$ldbuildopts" >> $makefile_cfg
   
   # Close and extra libs
   $echo "EXTRALIBS=$extralibs" >> $makefile_cfg
@@ -3862,7 +3892,7 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
   $echo >> $makefile_cfg
 
   # The GC library
-  $echo "CGCFLAGS=$cgcflags $cgcfinalflags $gcspecial -I$""(BOOTLIBDIR) $""(CPICFLAGS) $""(CPICFLAGS)" >> $makefile_cfg
+  $echo "CGCFLAGS=$cgcflags $cgcfinalflags $gcspecial -I$""(BOOTLIBDIR) $""(CPICFLAGS)" >> $makefile_cfg
   $echo "EXTRAGCLIBS=$extragclibs" >> $makefile_cfg
   $echo "CUSTOMGC=$gccustom" >> $makefile_cfg
   $echo "GCLIB=$gclib" >> $makefile_cfg
@@ -3872,12 +3902,15 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
      $echo "GCCLOSELIB=$sharedlibrarygcclosed" >> $makefile_cfg
      $echo "GCCLOSELIB_FTH=$sharedlibrarygcfthclosed" >> $makefile_cfg
      $echo "GCSTDOBJ=" >> $makefile_cfg
+     $echo "BIGLOOGCLIB=bigloogc" >> $makefile_cfg
   else
      $echo "GCCUSTOM=no" >> $makefile_cfg
      $echo "GCINCLUDE=-I$gcincdir" >> $makefile_cfg
      $echo 'GCCLOSELIB=-l$(GCLIB)' >> $makefile_cfg
      $echo "GCSTDOBJ=Clib/non_inline_alloc.o" >> $makefile_cfg
      $echo "GCLIBDIR=$gclibdir" >>  $makefile_cfg
+     $echo "EXTRALIBS+=-l$(GCLIB)" >> $makefile_cfg
+     $echo "BIGLOOGCLIB=" >> $makefile_cfg
   fi
   $echo >> $makefile_cfg
 
@@ -3957,7 +3990,7 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
     $echo "LD=$ld $ldopt" >> $makefile_cfg
     $echo "LDRPATHOPT=$ldrpath" >> $makefile_cfg
     $echo "LDFLAGS=$ldflags" >> $makefile_cfg
-    $echo "LDLIBS=$ldlibs" >> $makefile_cfg
+    $echo "LDLIBS=  # used to be $ldlibs" >> $makefile_cfg
     $echo "LDPRELOADSUPPORT=$ldpreload" >> $makefile_cfg
 
     $echo "LDSONAME=$ldsoname" >> $makefile_cfg
@@ -4054,7 +4087,7 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
       if [ "$hostos " = "mingw " ]; then
         gclibth=bigloogc
       else
-        gclibth=bigloogc_fth
+        gclibth=bigloogc_mt
       fi
     fi
 
@@ -4665,6 +4698,15 @@ if [ "$hostos " = "android " ]; then
   $echo >> $makefile_cfg
 fi
 
+# Makefile.misc variables
+$echo "# Makefile.misc variables (default values)" >> $makefile_cfg
+$echo "LIBSUFFIX=_s" >> $makefile_cfg
+$echo "LIBSUFFIXTHREAD=" >> $makefile_cfg
+$echo "BIGLOOLIB=bigloo" >> $makefile_cfg
+$echo "BIGLOOEXTRALIBS=" >> $makefile_cfg
+$echo "BIGLOOAPPLIBS=" >> $makefile_cfg
+$echo "APPRELEASE=" >> $makefile_cfg
+
 #*---------------------------------------------------------------------*/
 #*    Debian scripting                                                 */
 #*---------------------------------------------------------------------*/
@@ -4681,6 +4723,22 @@ for file in makedeb.sh makedebremote.sh; do
            -e "s|@APIS@|$apis|" \
      >> $deb  
   chmod a+rx $deb
+done  
+
+#*---------------------------------------------------------------------*/
+#*    Homebrew scripting                                               */
+#*---------------------------------------------------------------------*/
+for file in makebrew.sh; do
+  brew=arch/homebrew/$file
+  rm -f $brew 2> /dev/null
+  $echo "#!/bin/sh" > $brew
+  $echo "#* Automatically generated file (don't edit) */" >> $brew
+
+  cat $brew.in \
+     | sed -e "s|#!/bin/sh||" \
+           -e "s|@VERSION@|$release|" \
+     >> $brew  
+  chmod a+rx $brew
 done  
 
 #*---------------------------------------------------------------------*/
