@@ -247,7 +247,7 @@ libuvconfigureopt=
 #* libuvversion=1.x-24jan2015                                          */
 #* libuvversion=v1.19.1                                                */
 #* libuvversion=v1.19.2                                                */
-libuvversion=v1.20.3
+libuvversion=v1.40.0
 
 #*--- phidget (left blank for autoconfiguration) ----------------------*/
 phidget=
@@ -2694,9 +2694,9 @@ fi
 #*---------------------------------------------------------------------*/
 # find out the C library for phidget
 if [ "$phidget " = " " ]; then
-   phidgetlibs=`$autoconf phidget --cflags="$phidgetcflags" --version=$phidgetversion` 2> /dev/null
+   phidgetlibs=`$autoconf phidget --cflags="$phidgetcflags" --version=$phidgetversion`
 
-   if [ "$?" != "0" ]; then
+   if [ "$phidgetlibs " = " " ]; then
       phidget=no;
    else
       if [ "$phidgetlibdir " = " " ]; then
