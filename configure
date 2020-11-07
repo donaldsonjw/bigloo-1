@@ -179,6 +179,7 @@ socketlibs=
 threadsupport=
 pthreadlibs=
 pthreadtimedlock=1
+pthreadcancel=
 pthreadtermsig=15
 pthreadlocalstorage=
 
@@ -247,6 +248,7 @@ libuvconfigureopt=
 #* libuvversion=1.x-24jan2015                                          */
 #* libuvversion=v1.19.1                                                */
 #* libuvversion=v1.19.2                                                */
+#* libuvversion=v1.20.3                                                */
 libuvversion=v1.40.0
 
 #*--- phidget (left blank for autoconfiguration) ----------------------*/
@@ -997,6 +999,9 @@ while : ; do
     --customlibuv=no)
       customlibuv=no;;
 
+    --customlibuvversion=*)
+      libuvversion="`echo $1 | sed 's/^[^=]*=//'`";;
+
     --libuvconfigureopt=*)
       libuvconfigureopt="`echo $1 | sed 's/^[^=]*=//'`";;
 
@@ -1687,6 +1692,11 @@ if [ "$buildosversion " = " " ]; then
 fi
 
 #*---------------------------------------------------------------------*/
+#*    Check essential compilation tools                                */
+#*---------------------------------------------------------------------*/
+$autoconfdir/tools || exit 1
+
+#*---------------------------------------------------------------------*/
 #*    Pointer alignment                                                */
 #*---------------------------------------------------------------------*/
 alignment=`$autoconf alignment` || exit 1
@@ -1817,12 +1827,7 @@ case $hostos in
           pthreadlibs=no
           ldcomplibs="\$(GCCLOSELIB) -lc -lm"
         else
-#*           customgclib=bigloogc_mt                                   */
-#* 	  sharedlibrarygcfthclosed='-l$(GCLIB)-$(RELEASE)'             */
           extralibs="$extralibs $pthreadlibs"
-#* 	  if [ "$sharedcompiler " = "yes " ]; then                     */
-#*             ldcomplibs="\$(GCCLOSELIB) $pthreadlibs -lc -lm"        */
-#* 	  fi                                                           */
         fi
       fi
       if [ `dirname $bindir` != `dirname $libdir` ]; then
@@ -2020,6 +2025,7 @@ else
   # pthread_mutex_timedlock
   if [ "$pthreadlibs" != "no" ]; then
     pthreadtimedlock=`$autoconf pthreadlock --lib="$pthreadlibs"` || exit 1;
+    pthreadcancel=`$autoconf pthreadcancel --lib="$pthreadlibs"` || exit 1;
   fi
 
   # pthread_spinlock
@@ -3080,6 +3086,8 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
   localtime_r=`$autoconf localtime_r --cflags="$coflags"` || exit 1
   # The gmtime_r function
   gmtime_r=`$autoconf gmtime_r --cflags="$coflags"` || exit 1
+  # The timegm function
+  timegm=`$autoconf timegm --cflags="$coflags"` || exit 1
 
   # The warning C compiler options
   if [ "$cwarningflags" != "no" ]; then
@@ -3420,6 +3428,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
               -e "s|@BGL_HAVE_GMTOFF@|$gmtoff|" \
               -e "s|@BGL_HAVE_LOCALTIME_R@|$localtime_r|" \
               -e "s|@BGL_HAVE_GMTIME_R@|$gmtime_r|" \
+              -e "s|@BGL_HAVE_TIMEGM@|$timegm|" \
               -e "s|@HAVE_SHARED_LIBRARY@|$haveshlib|" \
               -e "s|@HAVE_DLOPEN@|$havedlopen|" \
               -e "s|@DLOPEN_LD_OPT@|$dlopen|" \
@@ -3498,6 +3507,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
               -e "s|@GC_HAVE_BLOCKING@|$gchaveblocking|" \
               -e "s|@GC_HAVE_DO_BLOCKING@|$gchavedoblocking|" \
               -e "s|@PTHREAD_HAVE_TIMEDLOCK@|$pthreadtimedlock|" \
+              -e "s|@PTHREAD_HAVE_CANCEL@|$pthreadcancel|" \
               -e "s|@PTHREAD_HAVE_SPINLOCK@|$pthreadspinlock|" \
               -e "s|@PTHREAD_HAVE_MUTEX_RECURSIVE@|$pthreadmutexrec|" \
               -e "s|@PTHREAD_POSIX_CONDV_TIMEDWAIT@|$pthreadcondvtimedwait|" \

@@ -1,20 +1,18 @@
 #!/bin/sh
 #*=====================================================================*/
-#*    serrano/prgm/project/bigloo/autoconf/socklen                     */
+#*    serrano/prgm/project/bigloo/bigloo/autoconf/timegm               */
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Wed Aug  9 13:27:23 1995                          */
-#*    Last change :  Sun Sep  6 21:21:46 2009 (serrano)                */
+#*    Last change :  Tue Oct 20 11:24:30 2020 (serrano)                */
 #*    -------------------------------------------------------------    */
-#*    Check for the host socket library.                               */
+#*    Check if timegm exists                                           */
 #*=====================================================================*/
 
 #*---------------------------------------------------------------------*/
 #*    flags                                                            */
 #*---------------------------------------------------------------------*/
 cflags=
-solaris_lib="-lsocket -lnsl"
-mingw_lib="-lws2_32"
 
 #*---------------------------------------------------------------------*/
 #*    We parse the arguments                                           */
@@ -27,9 +25,6 @@ while : ; do
     --cflags=*|-cflags=*)
       cflags="`echo $1 | sed 's/^[-a-z]*=//'`";;
 
-    --lib=*|-lib=*)
-      lib="`echo $1 | sed 's/^[-a-z]*=//'`";;
-
     -*)
       echo "Unknown option \"$1\", ignored" >&2;;
   esac
@@ -40,19 +35,9 @@ file=$TMP/actest$USER
 aout=$TMP/Xactest$USER
 
 #*---------------------------------------------------------------------*/
-#*    mingw is super clear                                             */
-#*---------------------------------------------------------------------*/
-if [ "$HOSTOS " = "mingw " ]; then
-  echo "-lws2_32" # -lwsock32 -lmswsock"
-  exit 0
-fi
-
-#*---------------------------------------------------------------------*/
 #*    compile                                                          */
 #*---------------------------------------------------------------------*/
-compile="$CC $cflags $file.c -o $aout $lib >/dev/null"
-compile_solaris="$CC $cflags $file.c -o $aout $solaris_lib >/dev/null"
-compile_mingw="$CC -D_MINGW_VER $cflags $file.c -o $aout $mingw_lib >/dev/null"
+compile="$CC $cflags $file.c -o $aout >/dev/null"
 
 #*---------------------------------------------------------------------*/
 #*    The test C file                                                  */
@@ -62,31 +47,36 @@ if( test -f $file.c ); then
 fi
 
 #*---------------------------------------------------------------------*/
-#*    Test                                                             */
+#*    Test1                                                            */
 #*---------------------------------------------------------------------*/
 cat > $file.c <<EOF
-#include <stdio.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#ifdef _MINGW_VER
-#include <winsock2.h>
-#endif
+#include <time.h>
+#include <ctype.h>
+#include <sys/time.h>
 
-main( int argc, char *argv[] ) {
-   printf( "%d\n", (socklen_t)argc );
-   return 0;
+int main( int argc, char *argv[] ) {
+   time_t sec;
+   struct tm tm = { tm_year: 2000 };
+
+   sec = timegm( &tm );
+
+   return sec <= 0;
 }
 EOF
 
-#*---------------------------------------------------------------------*/
-#*    Compilation test                                                 */
-#*---------------------------------------------------------------------*/
-if eval "$BUILDSH $compile" 2> /dev/null; then
-   rm -f $aout
-   rm -f $aout*
-   echo "1"
-else
-   echo "0"
+if eval "$BUILDSH $compile"; then
+   \rm -f $file.*
+   if eval "$HOSTSH $aout" > /dev/null; then
+      rm -f $aout
+      echo "1";
+      exit 0;
+   fi
 fi
 
+#*---------------------------------------------------------------------*/
+#*    default                                                          */
+#*---------------------------------------------------------------------*/
 \rm -f $file.*
+
+echo "0"
+exit 0;

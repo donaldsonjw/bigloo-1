@@ -109,6 +109,10 @@ api-c: api-init $(TAGS) .afile heap-c
 	mkdir -p objs
 	$(MAKE) api-c-static && $(MAKE) api-c-shared
 
+api-c_mt: api-init $(TAGS) .afile heap-c
+	mkdir -p objs
+	$(MAKE) api-c-static && $(MAKE) api-c-shared_mt
+
 heap-c: $(BOOTLIBDIR)/$(API).heap
 $(BOOTLIBDIR)/$(API).heap: .afile $(MISC_SRC_DIR)/make_lib.scm
 	$(RM) -f $(BOOTLIBDIR)/$(API).heap
@@ -149,6 +153,14 @@ api-c-shared:
 	  $(MAKE) api-one-c-shared LIBSUFFIX=_u LIBSUFFIXTHREAD= && \
 	  $(MAKE) api-one-c-shared LIBSUFFIX=_u LIBSUFFIXTHREAD=_mt && \
 	  $(MAKE) api-one-c-shared LIBSUFFIX=_eu LIBSUFFIXTHREAD= && \
+	  $(MAKE) api-one-c-shared LIBSUFFIX=_eu LIBSUFFIXTHREAD=_mt; \
+        fi
+
+api-c-shared_mt:
+	if [ "$(SHAREDLIBRARYSUPPORT)" = "yes" ]; then \
+	  $(MAKE) api-one-c-shared LIBSUFFIX=_s LIBSUFFIXTHREAD=_mt && \
+	  $(MAKE) api-one-c-shared LIBSUFFIX=_es LIBSUFFIXTHREAD=_mt && \
+	  $(MAKE) api-one-c-shared LIBSUFFIX=_u LIBSUFFIXTHREAD=_mt && \
 	  $(MAKE) api-one-c-shared LIBSUFFIX=_eu LIBSUFFIXTHREAD=_mt; \
         fi
 
