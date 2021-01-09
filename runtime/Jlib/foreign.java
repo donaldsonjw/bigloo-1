@@ -3696,6 +3696,11 @@ public final class foreign
 	 return ( d.calendar.get(Calendar.DST_OFFSET) > 0 ) ? 1 : -1;
       }
 
+   public static int BGL_DATE_ISGMT(date d)
+      {
+	 return (d.calendar.get(Calendar.ZONE_OFFSET) == 0);
+      }
+
    private static final byte[][] day_names = { "Sunday".getBytes(),
 					       "Monday".getBytes(),
 					       "Tuesday".getBytes(),
@@ -4827,6 +4832,11 @@ public final class foreign
 	 bgldynamic.abgldynamic.get().error_handler = hdl;
       }
 
+   public static void BGL_ERROR_HANDLER_PUSH(Object h, Object hdl)
+      {
+	 bgldynamic.abgldynamic.get().error_handler = MAKE_PAIR( h, hdl );
+      }
+
    public static Object BGL_UNCAUGHT_EXCEPTION_HANDLER_GET()
       {
 	 return bgldynamic.abgldynamic.get().uncaught_exception_handler;
@@ -5582,14 +5592,14 @@ public final class foreign
    //////
    public static final int PTR_ALIGNMENT = 2;
    public static final int SIGHUP = 1;
-   public static final int SIGQUIT = 2;
-   public static final int SIGINT = 3;
+   public static final int SIGINT = 2;
+   public static final int SIGQUIT = 3;
    public static final int SIGILL = 4;
    public static final int SIGTRAP = 5;
    public static final int SIGABRT = 6;
-   public static final int SIGKILL = 9;
-   public static final int SIGFPE = 8;
    public static final int SIGBUS = 7;
+   public static final int SIGFPE = 8;
+   public static final int SIGKILL = 9;
    public static final int SIGSEGV = 11;
    public static final int SIGPIPE = 13;
    public static final int SIGALRM = 14;
