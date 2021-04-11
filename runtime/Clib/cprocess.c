@@ -482,7 +482,25 @@ c_run_process( obj_t bhost, obj_t bfork, obj_t bwaiting,
 		     ri );
 	    cannot_run( pipes, bcommand, msg );
 	 }
-      } else {
+      } else if ( ( (i == 0) && INPUT_PORTP( redirection[i] )
+                   && ((PORT( redirection[i] ).kindof == KINDOF_FILE)
+                       || (PORT( redirection[i] ).kindof == KINDOF_PIPE)
+                       || (PORT( redirection[i] ).kindof == KINDOF_PROCPIPE)
+                       ) )
+                  || ( (i != 0) && OUTPUT_PORTP( redirection[i] ) 
+                       && ((PORT( redirection[i] ).kindof == KINDOF_FILE)
+                        || (PORT( redirection[i] ).kindof == KINDOF_PIPE)
+                        || (PORT( redirection[i] ).kindof == KINDOF_PROCPIPE)) ) ) {
+        if ( INPUT_PORTP( redirection[i] ) ) {
+          pipes[ i ][ 0 ] = fileno( PORT_FILE( redirection[i] ) );
+        } else {
+          if ( OUTPUT_PORT( redirection[i]  ).stream_type == BGL_STREAM_TYPE_FD ) {
+            pipes[ i ][ 0 ] = PORT_FD( redirection[i] );
+	  } else {
+            pipes[ i ][ 0 ] = fileno( PORT_FILE( redirection[i] ) );
+          }
+        }
+      }else {
 	 if( KEYWORDP( redirection[ i ] ) ) {
 	    /* redirection in a pipe */
 	    if( pipe( pipes[ i ] ) < 0 ) {
@@ -523,7 +541,9 @@ c_run_process( obj_t bhost, obj_t bfork, obj_t bwaiting,
       case 0:
 	 /* The child process */
 	 for( i = 0; i < 3; i++ ) {
-	    if( STRINGP( redirection[ i ] ) ) {
+	    if( STRINGP( redirection[ i ] )
+                || INPUT_PORTP( redirection[ i ])
+                || OUTPUT_PORTP( redirection[ i ] ) ) {
 	       /* redirection in a file */
 	       close( i );
 	       if( dup( pipes[ i ][ 0 ] ) == -1 ) {
@@ -622,7 +642,9 @@ c_run_process( obj_t bhost, obj_t bfork, obj_t bwaiting,
 	 /* This is the parent process */
 	 PROCESS( proc ).pid = pid;
 	 for( i = 0; i < 3; i++ ) {
-	    if( STRINGP( redirection[ i ] ) ) {
+	    if( STRINGP( redirection[ i ] )
+                || INPUT_PORTP( redirection[ i ] )
+                || OUTPUT_PORTP( redirection[ i ] ) ) {
 	       /* redirection in a file */
 	       close( pipes[ i ][ 0 ] );
 	    } else {
@@ -794,7 +816,25 @@ c_run_process( obj_t bhost, obj_t bfork, obj_t bwaiting,
                  bgl_get_last_error_message( "unknown error" ) );
         cannot_run( pipes, bcommand, msg );
       }
-    } else {
+    } else if ( ( (i == 0) && INPUT_PORTP( redirection[i] )
+                   && ((PORT( redirection[i] ).kindof == KINDOF_FILE)
+                       || (PORT( redirection[i] ).kindof == KINDOF_PIPE)
+                       || (PORT( redirection[i] ).kindof == KINDOF_PROCPIPE)
+                       ) )
+                  || ( (i != 0) && OUTPUT_PORTP( redirection[i] ) 
+                       && ((PORT( redirection[i] ).kindof == KINDOF_FILE)
+                        || (PORT( redirection[i] ).kindof == KINDOF_PIPE)
+                        || (PORT( redirection[i] ).kindof == KINDOF_PROCPIPE)) ) ) {
+        if ( INPUT_PORTP( redirection[i] ) ) {
+          pipes[ i ][ 0 ] = _get_osfhandle( fileno( PORT_FILE( redirection[i] ) ) );
+        } else {
+          if ( OUTPUT_PORT( redirection[i]  ).stream_type == BGL_STREAM_TYPE_FD ) {
+            pipes[ i ][ 0 ] = _get_osfhandle( PORT_FD( redirection[i] ) );
+	  } else {
+            pipes[ i ][ 0 ] = _get_osfhandle( fileno( PORT_FILE( redirection[i] ) ) );
+          }
+        }
+      } else {
       if( KEYWORDP( redirection[ i ] ) ) {
         /* redirection in a pipe */
         if (!CreatePipe( &pipes[ i ][ 0 ],
@@ -906,7 +946,9 @@ c_run_process( obj_t bhost, obj_t bfork, obj_t bwaiting,
   ZeroMemory( &process_information, sizeof( process_information ) );
 
   for( i= 0 ; i < 3 ; ++i ) {
-     if( STRINGP( redirection[ i ] ) )
+     if( STRINGP( redirection[ i ] )
+         || INPUT_PORTP( redirection[ i ] )
+         || OUTPUT_PORTP( redirection[ i ] ))
 	/* redirection in a file */
 	*(stream_handles[ i ])= pipes[ i ][ 0 ];
      else
