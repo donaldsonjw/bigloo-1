@@ -4,7 +4,7 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Tue Jan 25 16:05:10 1994                          */
-#*    Last change :  Mon May 18 08:43:06 2020 (serrano)                */
+#*    Last change :  Tue Sep  7 13:55:12 2021 (serrano)                */
 #*    Last change :  Thu May 14 09:43:33 2020 (serrano)                */
 #*    Copyright   :  1994-2021 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
@@ -17,9 +17,11 @@
 #*---------------------------------------------------------------------*/
 #*    Bigloo revision number                                           */
 #*---------------------------------------------------------------------*/
-release=4.4b
+release=4.4c
+buildrelease=4.4b
 version=
 bigloourl=http://www-sop.inria.fr/indes/fp/Bigloo
+biglooftp=ftp://ftp-sop.inria.fr/indes/fp/Bigloo
 
 bigloosvn=ssh://hop@hop.inria.fr/bigloo
 
@@ -407,7 +409,7 @@ enable_bglpkg="no"
 
 #*--- pcre configuration ----------------------------------------------*/
 # valid values are "no", "yes"
-enable_configure_pcre="yes"
+enable_configure_pcre="no"
 custompcre=
 pcresrc=$PCRESRC
 pcreconfigureopt=
@@ -415,6 +417,18 @@ pcreconfigureopt=
 if [ "$pcresrc " = " " ]; then
   pcreversion=8.43
   pcresrc=pcre/pcre-$pcreversion.tgz
+fi  
+
+#*--- pcre2 configuration ---------------------------------------------*/
+# valid values are "no", "yes"
+enable_configure_pcre2="yes"
+custompcre2=
+pcre2src=$PCRE2SRC
+pcre2configureopt=
+
+if [ "$pcre2src " = " " ]; then
+  pcre2version=10.36
+  pcre2src=pcre2/pcre2-$pcre2version.tgz
 fi  
 
 #*---------------------------------------------------------------------*/
@@ -504,6 +518,7 @@ while : ; do
       gcconfigureopt="$gcconfigureopt $opt";
       libuvconfigureopt="$libuvconfigureopt $opt";
       pcreconfigureopt="$pcreconfigureopt $opt";
+      pcre2configureopt="$pcre2configureopt $opt";
       unistringconfigureopt="$unistringconfigureopt $opt";
       gmpconfigureopt="$gmpconfigureopt $opt";;
       
@@ -844,7 +859,8 @@ while : ; do
       customgmp=yes;
       customunistring=yes;
       customlibuv=yes;
-      custompcre=yes;;
+      custompcre=no;
+      custompcre2=yes;;
       
     --finalization=yes)
       gcfinalizer=1;
@@ -1023,6 +1039,18 @@ while : ; do
     --pcresrc=*)
       pcresrc="`echo $1 | sed 's/^[^=]*=//'`";;
 
+    --no-pcre2|--disable-pcre2)
+      enable_configure_pcre2="no";;
+
+    --custompcre2=yes|--custompcre2)
+      custompcre2=yes;;
+
+    --pcre2configureopt=*)
+      pcre2configureopt="`echo $1 | sed 's/^[^=]*=//'`";;
+
+    --pcre2src=*)
+      pcre2src="`echo $1 | sed 's/^[^=]*=//'`";;
+
     --sqltiny)
       sqltinyforce="yes";;
 
@@ -1156,6 +1184,7 @@ while : ; do
       echo "   --no-resolv (disable resolv library support)" >&2;
       echo "   --no-unistring (disable unistring library support)" >&2;
       echo "   --no-pcre (disable prce library support)" >&2;
+      echo "   --no-pcre2 (disable prce2 library support)" >&2;
       echo "   --no-ldpreload" >&2;
       echo "   --sharedbde=yes|no [default no] (link Bde tools against shared libraries)" >&2;
       echo "   --sharedcompiler=yes|no [default no] (link Bigloo against shared libraries)" >&2;
@@ -1186,6 +1215,9 @@ while : ; do
       echo "   --disable-pcre (see --no-pcre)" >&2;
       echo "   --custompcre=yes|no [default no]" >&2;
       echo "   --pcresrc=file [default \$PCRE\")" >&2;
+      echo "   --disable-pcre2 (see --no-pcre2)" >&2;
+      echo "   --custompcre2=yes|no [default no]" >&2;
+      echo "   --pcre2src=file [default \$PCRE2\")" >&2;
       echo "   --customgmp=yes|no [default no]" >&2;
       echo "   --gmpsrc=file [default \$GMP\")" >&2;
       echo "   --customunistring=yes|no [default no]" >&2;
@@ -1341,11 +1373,11 @@ if [ $action = "all" ]; then
   fi
 fi
 
-$echo "Checking local configuration..."
-
 #*---------------------------------------------------------------------*/
 #*    Weeding out bad configurations                                   */
 #*---------------------------------------------------------------------*/
+$echo "checking local configuration..."
+
 if [ "$action" != "bigloo_config_el" ]; then
   # checking the correctness of selected apis
   err=
@@ -1619,6 +1651,43 @@ $autoconfdir/mkruntest $autoconfdir/runtest \
    --echo=$echo \
    --user=""
 
+# Check if configuring a prebootstrap version
+_bootmethod=`$autoconf bootmethod --release=$release --buildrelease=$buildrelease` || exit 1
+bootmethod="`echo $_bootmethod | awk -F: '{print $1}'`"
+bootbigloo="`echo $_bootmethod | awk -F: '{print $2}'`"
+bootbigloobindir=`dirname $bootbigloo 2> /dev/null`
+
+if [ $bootmethod = "source" ]; then
+  mkdir -p download
+  if [ ! -f download/bigloo-$buildrelease.tar.gz ]; then
+    echo "downloading bigloo $buildrelease from $biglooftp"
+    wget $biglooftp/bigloo-$buildrelease.tar.gz -O download/bigloo-$buildrelease.tar.gz
+  else
+    echo "using downloaded image \"download/bigloo-$buildrelease.tar.gz\""
+  fi
+
+  if [ $? != 0 ]; then
+    echo "command failed \"wget $ftp/bigloo-$buildrelease -o $TMPDIR/bigloo-$buildrelease.tar.gz\""
+    wget --help > /dev/null 2> /dev/null
+    
+    if [ $? != 0 ]; then
+      echo "probably because \"wget\" is missing."
+    fi
+    
+    exit 1
+  else
+    bootbindir=$PWD/download/bin
+    bootbigloo=$bootbindir/bigloo
+  fi
+fi
+
+if [ "$bootbigloobindir " = " " ]; then
+  bootbigloobindir=$PWD
+elif [ $bootbigloobindir = "." ]; then
+  path=`which $bootbigloo`
+  bootbigloobindir=`dirname $path`
+fi  
+
 # Grab the hostos info
 if [ "$hostos " = " " ]; then
   hostos=`$autoconf os` || exit 1
@@ -1821,7 +1890,8 @@ case $hostos in
       customunistring=yes
       customlibuv=yes
       customgc=yes
-      custompcre=yes
+      custompcre=no
+      custompcre2=yes
       
       if [ "$mode " != "benchmark " -a "$pthreadlibs " != "no " ]; then
         if [ "$threadsupport " = "no " ]; then
@@ -2181,7 +2251,7 @@ if [ "$action" != "bigloo_config_el" ]; then
         autoopts=`$autoconf config.guess --dir="$pwd/gc/$gccustom"`
         gcconfigureopt="$autoopts $gcconfigureopt"
         gcconfigurethreadsopt="$gcconfigurethreadsopt"
-        $echo "+ Configuring custom GC ($gccustom)..." && \
+        $echo "+ configuring custom GC ($gccustom)..." && \
         (. ./gc/configure-$gccustom $configuregcextraopt) || exit 1
       fi
     fi
@@ -2299,7 +2369,7 @@ if [ "$libuv_is_enabled " = "yes " -a "$customlibuv " = "yes " ]; then
   $echo "+ Installing custom libuv ($libuvversion) source code."
   (cd libuv; . ./install-libuv) || exit 1
   
-  $echo "+ Configuring custom libuv..."
+  $echo "+ configuring custom libuv..."
   (cd libuv/libuv-$libuvversion; ./autogen.sh)
   autoopts=`$autoconf config.guess --dir="$pwd/libuv/libuv-$libuvversion"`
   libuvconfigureopt="$autoopts $libuvconfigureopt"
@@ -2538,12 +2608,30 @@ havemixer=`$autoconf mixer` || exit 1
 #*    Regexp                                                           */
 #*---------------------------------------------------------------------*/
 buildpcrelibdir=$buildlibdir
+buildpcre2libdir=$buildlibdir
 
 if [ "$regexp " = " " ]; then
   pcrelibs=no
+  pcre2libs=no
     
   # find out the C library for pcre
-  if [ "$enable_configure_pcre " = "yes " ]; then
+  if [ "$enable_configure_pcre2 " = "yes " ]; then
+    if [ "$custompcre2 " != "yes " ]; then
+      pcre2libs=`$autoconf pcre2` || exit 1;
+      extrapcre2=pcre2-8
+      pcre2prefix=`pcre2-config --prefix 2> /dev/null`
+
+      if [ "$? " = "0 " ]; then
+	if [ "$pcre2prefix" != "/usr" -a "$pcre2prefix" != "/usr/local" ]; then
+	  rpath="$pcre2prefix/lib $rpath"
+	fi
+      fi
+    fi
+  else
+    custompcre2=no
+  fi
+
+  if [ "$enable_configure_pcre " = "yes " -a "$custompcre2 " != "yes " ]; then
     if [ "$custompcre " != "yes " ]; then
       pcrelibs=`$autoconf pcre` || exit 1;
       extrapcre=pcre
@@ -2559,16 +2647,42 @@ if [ "$regexp " = " " ]; then
     custompcre=no
   fi
 
-  if [ "$pcrelibs " = "no " ]; then
-    if [ "$custompcre " != "no " ]; then
+  if [ "$pcre2libs " = "no " ]; then
+    if [ "$custompcre2 " != "no " ]; then
+      custompcre2=yes
+      pcre2version=`$echo $pcre2src | sed 's/pcre2//g' | sed 's/[^0-9]*//' | sed 's/[.][^0-9]*$//'`
+      buildpcre2libdir=$bootdir/pcre2/pcre2-$pcre2version/.libs
+	
+      $echo "+ Installing custom pcre2 source code."
+      (cd pcre2 && PCRE2=$pcre2src && export PCRE2 && ./install-pcre2) || exit 1
+
+      $echo "+ configuring custom pcre2..."
+      autoopts=`$autoconf config.guess --dir="$pwd/pcre2/pcre2-$pcre2version"`
+      pcre2configureopt="$autoopts $pcre2configureopt"
+      (cd pcre2; . ./configure-pcre2) || exit 1
+	
+      pcre2libs=yes
+      extrapcre2=pcre2-8
+      libpcre2buildpath="\$(BOOTDIR)/pcre2\$(LIBDIR)/\$(FILDIR)"
+      ldbuildopts="-L$bootdir/pcre2$libdir/$fildir $ldbuildopts"
+      buildlibdir="$bootdir/pcre2$libdir/$fildir:$buildlibdir"
+      cbuildflags="-I$bootdir/pcre2$libdir/$fildir $cbuildflags"
+      lflags="$lflags $ldbuildopts"
+    else
+      pcre2libs=no
+    fi
+  fi
+
+  if [ "$pcre2libs " = "no " -a "$pcrelibs " = "no " ]; then
+    if [ "$custompcre " != "no " -a "$custompcre2 " != "yes " ]; then
       custompcre=yes
       pcreversion=`$echo $pcresrc | sed 's/[^0-9]*//' | sed 's/[.][^0-9]*$//'`
       buildpcrelibdir=$bootdir/pcre/pcre-$pcreversion/.libs
 	
       $echo "+ Installing custom pcre source code."
-      (cd pcre &&  PCRE=$pcresrc && export PCRE && ./install-pcre) || exit 1
+      (cd pcre && PCRE=$pcresrc && export PCRE && ./install-pcre) || exit 1
 
-      $echo "+ Configuring custom pcre..."
+      $echo "+ configuring custom pcre..."
       autoopts=`$autoconf config.guess --dir="$pwd/pcre/pcre-$pcreversion"`
       pcreconfigureopt="$autoopts $pcreconfigureopt"
       (cd pcre; . ./configure-pcre) || exit 1
@@ -2585,23 +2699,35 @@ if [ "$regexp " = " " ]; then
     fi
   fi
 
-  if [ "$pcrelibs " != "no " ]; then
+  if [ "$pcre2libs " != "no " ]; then
+    extralibs="-l$extrapcre2 $extralibs"
+    regexp=pcre2
+    regexpscm=pcre.scm
+    regexpc=pcre.c
+  elif [ "$pcrelibs " != "no " ]; then
     extralibs="-l$extrapcre $extralibs"
     regexp=pcre
+    regexpscm=pcre.scm
+    regexpc=pcre.c
 
     if [ `$autoconf pcrefreestudy` = "yes" ]; then
       regexphasfreestudy=1
     fi
   else
     regexp=pregexp
+    regexpscm=pregexp.scm
+    regexpc=pregexp.c
   fi
 fi
 
-$echo ";; generated file, don't edit (`date`)" > runtime/Unsafe/regexp.scm
-cat runtime/Unsafe/$regexp.scm >>  runtime/Unsafe/regexp.scm
+$echo ";; generated file (from $regexpscm), don't edit (`date`)" > runtime/Unsafe/regexp.scm
+cat runtime/Unsafe/$regexpscm >>  runtime/Unsafe/regexp.scm
 
-if [ -f runtime/objs/obj_u/Unsafe/$regexp.c ]; then
-  cp runtime/objs/obj_u/Unsafe/$regexp.c runtime/objs/obj_u/Unsafe/regexp.c;
+if [ -f runtime/objs/obj_u/Unsafe/$regexpc ]; then
+  $echo "/* generated file (from $regexpc), don't edit (`date`) */" > runtime/objs/obj_u/Unsafe/regexp.c
+  cat runtime/objs/obj_u/Unsafe/$regexpc >> runtime/objs/obj_u/Unsafe/regexp.c
+else
+  touch runtime/objs/obj_u/Unsafe/regexp.c
 fi
 
 featureflags="-srfi enable-$regexp $featureflags"
@@ -2640,7 +2766,7 @@ if [ "$unistring " != "no " ]; then
     autoopts=`$autoconf config.guess --dir="$pwd/libunistring"`
     unistringconfigureopt="$autoopts $unistringconfigureopt"
     
-    $echo "+ Configuring custom unistring..."
+    $echo "+ configuring custom unistring..."
     (cd libunistring; . ./configure-unistring) || exit 1
   fi
     
@@ -2724,7 +2850,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
 
   # Tell what we are doing
   $echo ""
-  $echo "Configuring $bigloo_config_h, $bigloo_config_jvm, $bigloo_config_sch:"
+  $echo "configuring $bigloo_config_h, $bigloo_config_jvm, $bigloo_config_sch:"
 
   # The C compiler options
   cbraflags=`$autoconf ccbracket` || exit 1
@@ -3539,6 +3665,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
 	      -e "s|@BGLBUILDLIBUVLIBDIR@|$buildlibuvlibdir|" \
 	      -e "s|@BGLBUILDLIBUNISTRINGLIBDIR@|$buildlibunistringlibdir|" \
 	      -e "s|@BGLBUILDPCRELIBDIR@|$buildpcrelibdir|" \
+	      -e "s|@BGLBUILDPCRE2LIBDIR@|$buildpcre2libdir|" \
 	      -e "s|@BGLBUILDGMPLIBDIR@|$buildgmplibdir|" \
 	      -e "s|@SHELL@|$shell|" \
 	      -e "s|@BIGLOO@|$bigloo|" \
@@ -3665,7 +3792,7 @@ fi
 #*---------------------------------------------------------------------*/
 if [ $action = "all" -o $action = "bigloo_config_el" ]; then
   $echo ""
-  $echo "Configuring $bigloo_config_el:"
+  $echo "configuring $bigloo_config_el:"
 
   if [ "$emacs " = " " ]; then
     emacs=emacs
@@ -3707,7 +3834,7 @@ fi
 #*---------------------------------------------------------------------*/
 if [ "$configureinfo" = "yes" ]; then
   $echo ""
-  $echo "Configuring texinfo:"
+  $echo "configuring texinfo:"
 
   infoinfo=`$autoconf info --makeinfo="$makeinfo" \
                            --texi2dvi="$texi2dvi" \
@@ -3778,6 +3905,15 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
   $echo "# automatically generated, don't edit" > $makefile_build
   $echo "# `date`" >> $makefile_build
   $echo "" >> $makefile_build
+
+  # The boot mode (see autoconf/prebuild)
+  $echo "BOOTMETHOD=$bootmethod" >> $makefile_build
+  $echo "BOOTBIGLOO=$bootbigloo" >> $makefile_build
+  $echo "BOOTBIGLOOBINDIR=$bootbigloobindir" >> $makefile_build
+  $echo "BOOTBUILDRELEASE=$buildrelease" >> $makefile_build
+  
+  $echo >> $makefile_build
+
   # The Buildbin directory
   $echo "BGLBUILDBINDIR=$buildbindir" >> $makefile_build
   $echo "BGLBUILDLIBDIR=$buildlibdir" >> $makefile_build
@@ -3956,6 +4092,16 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
   fi
   $echo >> $makefile_cfg
 
+  # The PCRE2 library
+  if [ "$custompcre2 " = "yes " ]; then
+    $echo "PCRE2CUSTOM=yes" >> $makefile_cfg
+    $echo "PCRE2CUSTOMVERSION=$pcre2version" >> $makefile_cfg
+  else
+    $echo "PCRE2CUSTOM=no" >> $makefile_cfg
+    $echo "PCRE2CUSTOMVERSION=$pcre2version" >> $makefile_cfg
+  fi
+  $echo >> $makefile_cfg
+
   # The UNISTRING library
   if [ "$customunistring " = "yes " ]; then
     $echo "UNISTRINGCUSTOM=yes" >> $makefile_cfg
@@ -4058,6 +4204,16 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
     else
       ldcompshared="-lpcre $ldcompshared" >> $makefile_cfg
       ldcompstatic="-lpcre $ldcompstatic" >> $makefile_cfg
+    fi
+  fi
+  
+  if [ "$pcre2libs " != "no " ]; then
+    if [ "$custompcre2 " = "yes " ]; then
+      ldcompshared="-l$extrapcre2 $ldcompshared" >> $makefile_cfg
+      ldcompstatic="$libpcre2buildpath/libpcre2-8.a $ldcompstatic" >> $makefile_cfg
+    else
+      ldcompshared="-l$extrapcre2 $ldcompshared" >> $makefile_cfg
+      ldcompstatic="-l$extrapcre2 $ldcompstatic" >> $makefile_cfg
     fi
   fi
   
@@ -4796,9 +4952,9 @@ if [ "$abortmissing " = "yes " ]; then
 	exit 1;
     fi
     
-    if [ ! "$regexp " = "pcre " ]; then
+    if [ ! "$regexp " = "pcre " -a ! "$regexp " = "pcre2 " ]; then
 	$echo ""
-	$echo "*** ERROR Missing library: pcre" >&2
+	$echo "*** ERROR Missing library: pcre or pcre2" >&2
 	$echo "exiting..." >&2
 	exit 1;
     fi
@@ -4897,6 +5053,7 @@ $echo "  gmp version........................... $gmpversion" >> $configurelog
 $echo "  unistring library..................... $extraunistring" >> $configurelog
 $echo "  pthread libraries..................... $pthreadlibs" >> $configurelog
 $echo "  openssl libraries..................... $openssllibs" >> $configurelog
+$echo "  regexp................................ $regexp" >> $configurelog
 $echo "  sqlite libraries...................... $sqlitelibs" >> $configurelog
 if [ "$ldopt" != "no-share" ]; then
   $echo "  suffix of shared libraries............ $sharedsuffix" >> $configurelog
@@ -5031,6 +5188,7 @@ if [ "$summary" = "yes" ]; then
   else
     $echo "  unistring support........... $extraunistring"
   fi
+  $echo "  regexp...................... $regexp"
   $echo
   $echo "Directories where Bigloo will be installed:"
   $echo "  binaries.................... $bindir"

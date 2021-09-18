@@ -3,8 +3,8 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Wed Oct  6 11:49:21 2004                          */
-/*    Last change :  Tue Apr 17 08:01:05 2018 (serrano)                */
-/*    Copyright   :  2004-18 Manuel Serrano                            */
+/*    Last change :  Tue Jun 22 15:31:34 2021 (serrano)                */
+/*    Copyright   :  2004-21 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Thread tools (mutex, condition-variable, ...).                   */
 /*    -------------------------------------------------------------    */
@@ -223,9 +223,7 @@ make_exitd_bottom() {
    struct exitd *bottom =
       (struct exitd *)GC_MALLOC_UNCOLLECTABLE( sizeof( struct exitd ) );
 
-   bottom->protect0 = BFALSE;
-   bottom->protect1 = BFALSE;
-   bottom->protectn = BNIL;
+   bottom->protect = BNIL;
 
    return bottom;
 }
@@ -262,7 +260,7 @@ make_dynamic_env() {
       env->dynamic_env.mvalues[ i ] = BUNSPEC;
    }
 
-   env->dynamic_env.error_handler = BNIL;
+   env->dynamic_env.error_handler = MAKE_PAIR( BUNSPEC, BFALSE );
    env->dynamic_env.uncaught_exception_handler = BNIL;
    env->dynamic_env.error_notifiers = BNIL;
    

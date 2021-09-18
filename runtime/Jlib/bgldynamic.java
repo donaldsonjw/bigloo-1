@@ -1,10 +1,10 @@
 /*=====================================================================*/
-/*    serrano/prgm/project/bigloo/runtime/Jlib/bgldynamic.java         */
+/*    .../prgm/project/bigloo/bigloo/runtime/Jlib/bgldynamic.java      */
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Sat Oct 19 10:42:04 2002                          */
-/*    Last change :  Tue Feb  8 10:39:49 2011 (serrano)                */
-/*    Copyright   :  2002-11 Manuel Serrano                            */
+/*    Last change :  Thu Sep 16 17:44:39 2021 (serrano)                */
+/*    Copyright   :  2002-21 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Handling global dynamic environments (current_output_port et al) */
 /*=====================================================================*/
@@ -78,7 +78,7 @@ public class bgldynamic
 				     unspecified.unspecified),
 			    unspecified.unspecified );
 
-      error_handler = bigloo.nil.nil;
+      error_handler = new pair( unspecified.unspecified, bigloo.foreign.BFALSE );
       uncaught_exception_handler = bigloo.nil.nil;
 
       mvalues_number = 1;

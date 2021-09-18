@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/comptime/Cfa/tvector.scm             */
+;*    serrano/prgm/project/bigloo/bigloo/comptime/Cfa/tvector.scm      */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Wed Apr  5 18:47:23 1995                          */
-;*    Last change :  Wed May 31 10:43:16 2017 (serrano)                */
-;*    Copyright   :  1995-2017 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Sat Sep  4 15:17:39 2021 (serrano)                */
+;*    Copyright   :  1995-2021 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The `vector->tvector' optimization.                              */
 ;*=====================================================================*/
@@ -15,7 +15,8 @@
 (module cfa_tvector
    (include "Tools/trace.sch"
 	    "Ast/unit.sch"
-	    "Tvector/tvector.sch")
+	    "Tvector/tvector.sch"
+	    "Cfa/set.sch")
    (import  engine_param
 	    module_type
 	    module_pragma
@@ -437,8 +438,9 @@
 ;*    patch! ::set-ex-it ...                                           */
 ;*---------------------------------------------------------------------*/
 (define-method (patch! node::set-ex-it)
-   (with-access::set-ex-it node (var body)
+   (with-access::set-ex-it node (var body onexit)
       (set! body (patch! body))
+      (set! onexit (patch! onexit))
       (patch! var)
       node))
 

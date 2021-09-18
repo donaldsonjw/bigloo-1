@@ -3,8 +3,8 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Thu Jun 19 20:48:50 1997                          */
-#*    Last change :  Tue Mar 24 12:22:05 2020 (serrano)                */
-#*    Copyright   :  1997-2020 Manuel Serrano, see LICENSE file        */
+#*    Last change :  Sat May  1 09:20:13 2021 (serrano)                */
+#*    Copyright   :  1997-2021 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The global autoconf Makefile.                                    */
 #*=====================================================================*/
@@ -58,14 +58,14 @@ POPULATION	= Makefile bigloo.sh.in bglafile.sh.in bglmco.sh.in \
                   stdint stdlibint unistdint maemo.arm android \
                   gcversion gchavedoblocking gchavestartblocking nbprocs \
                   gstreamer gstreameraudio \
-                  alsa pulseaudio mpg123 flac pcre pcrefreestudy avahi \
+                  alsa pulseaudio mpg123 flac pcre pcrefreestudy pcre2 avahi \
                   dbus gmp resolv resolvsym unistring limbs signbit rdynamic \
                   getuid getgid gecos getprotoent machdep arflags mixer \
                   config.guess ccfortify environ setenv symlink \
                   androidmkdir bgl-pkg-config phidget phidgetlibdir \
                   gmtoff localtime_r gmtime_r timegm libuv getgroups ioctl \
                   pthreadkill syslog overflow semaphore lockf likely \
-                  gccattrs getrlimit c99stackalloc tools
+                  gccattrs getrlimit c99stackalloc tools bootmethod
 
 #*---------------------------------------------------------------------*/
 #*    pop ...                                                          */

@@ -1,9 +1,9 @@
 ;*=====================================================================*/
-;*    .../project/bigloo/api/openpgp/src/Llib/pgp_composition.scm      */
+;*    .../bigloo/bigloo/api/openpgp/src/Llib/pgp_composition.scm       */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Florian Loitsch                                   */
 ;*    Creation    :  Mon Aug 30 09:36:17 2010                          */
-;*    Last change :  Fri Apr 27 11:11:40 2012 (serrano)                */
+;*    Last change :  Tue May  4 07:01:14 2021 (serrano)                */
 ;*    Copyright   :  2010-21 Florian Loitsch, Manuel Serrano           */
 ;*    -------------------------------------------------------------    */
 ;*    RFC2440 encoding/decoding                                        */
@@ -17,9 +17,10 @@
 	   __openpgp-packets
 	   __openpgp-decode
 	   __openpgp-encode
-	   __openpgp-port-util)
+	   __openpgp-port-util
+	   __openpgp-error)
    (export
-    (decode-pgp p::input-port)
+    (decode-pgp p::input-port #!key ignore-bad-packet)
     (parse-packets packets::pair-nil)
     (encode-native-pgp pgp-composition::PGP-Composition p::output-port)
     (encode-armored-pgp pgp-composition::PGP-Composition
@@ -57,12 +58,12 @@
 ;*    -------------------------------------------------------------    */
 ;*    either returns a PGP-Composition, or a list of PGP-Keys.         */
 ;*---------------------------------------------------------------------*/
-(define (decode-pgp-content p::input-port)
+(define (decode-pgp-content p::input-port ignore-bad-packet)
    ;; TODO: we only handle Compressed packets at the "toplevel", as a message
    ;; inside signatures and inside Literals.
    (with-trace 'pgp "decode-pgp-content"
       (trace-item "p=" p)
-      (let ((packets (decode-packets p)))
+      (let ((packets (decode-packets p ignore-bad-packet)))
 	 (parse-packets packets))))
 
 ;*---------------------------------------------------------------------*/
@@ -72,9 +73,9 @@
    (with-trace 'pgp "parse-packets"
       (cond
 	 ((null? packets)
-	  (error 'parse-packets
-		 "no packet decoded"
-		 #f))
+	  (openpgp-error "parse-packets"
+	     "no packet decoded"
+	     #f))
 	 ((and (isa? (car packets) PGP-Key-Packet)
 	       (with-access::PGP-Key-Packet (car packets) (subkey?)
 		  (not subkey?)))
@@ -95,9 +96,9 @@
 	  (with-access::PGP-Compressed-Packet (car packets) (packets)
 	     (parse-packets packets)))
 	 (else
-	  (error 'parse-packets
-		 "could not parse pgp-message"
-		 packets)))))
+	  (openpgp-error "parse-packets"
+	     "could not parse pgp-message"
+	     packets)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    parse-keys ...                                                   */
@@ -197,9 +198,9 @@
 			(and (not (subkey-sig? (car pkts)))
 			     (not (revocation-signature? (car pkts)))))
 		    (when (null? subkey-sigs)
-		       (error 'parse-subkey
-			      "Subkey not followed by subkey-binding Signature"
-			      #f))
+		       (openpgp-error "parse-subkey"
+			  "Subkey not followed by subkey-binding Signature"
+			  #f))
 		    (loop pkts
 			  (cons (instantiate::PGP-Subkey
 				   (key-packet (car packets))
@@ -223,9 +224,9 @@
 	    (receive (nuser-ids remaining-packets)
 	       (parse-user-ids remaining-packets)
 	       (when (and (null? nuser-ids) (null? user-ids))
-		  (error 'parse-key
-			 "At least one user ID is required"
-			 #f))
+		  (openpgp-error "parse-key"
+		     "At least one user ID is required"
+		     #f))
 	       (receive (subkeys remaining-packets)
 		  (parse-subkeys remaining-packets)
 		  (if (isa? main-key-packet PGP-Key-Packet)
@@ -254,9 +255,9 @@
 		 (session-keys '()))
 	 (cond
 	    ((null? packets)
-	     (error 'parse-encrypted-message
-		    "missing encrypted data packet"
-		    #f))
+	     (openpgp-error "parse-encrypted-message"
+		"missing encrypted data packet"
+		#f))
 	    ((isa? (car packets) PGP-Symmetrically-Encrypted-Packet)
 	     (when (not (null? (cdr packets)))
 		(warning "Packet after encrypted data discarded"))
@@ -336,14 +337,14 @@
 	     (let ((one-pass-sigs (reverse! one-pass-sigs)))
 		(when (not (=fx (length one-pass-sigs)
 				(length sigs)))
-		   (error 'parse-signature
-			  "bad one-pass signature"
-			  #f))
+		   (openpgp-error "parse-signature"
+		      "bad one-pass signature"
+		      #f))
 		(for-each (lambda (op-pkt sig-pkt)
 			     (when (not (same-sig? op-pkt sig-pkt))
-				(error 'parse-signature
-				       "bad one-pass-signature"
-				       #f)))
+				(openpgp-error "parse-signature"
+				   "bad one-pass-signature"
+				   #f)))
 			  one-pass-sigs
 			  sigs)
 		(instantiate::PGP-One-Pass-Signature
@@ -364,22 +365,22 @@
 		   msg
 		   sigs)))
 	    (expect-one-pass?
-	     (error 'parse-signature
-		    "bad one-pass signature"
-		    #f))
+	     (openpgp-error "parse-signature"
+		"bad one-pass signature"
+		#f))
 	    ((and (not msg) (isa? (car packets) PGP-Literal-Packet))
 	     (loop (cdr packets) #f one-pass-sigs (car packets) sigs))
 	    ((not msg)
-	     (error 'parse-signature
-		    "bad one-pass signature"
-		    #f))
+	     (openpgp-error "parse-signature"
+		"bad one-pass signature"
+		#f))
 	    ((isa? (car packets) PGP-Signature-Packet)
 	     (loop (cdr packets) #f one-pass-sigs msg
 		(cons (car packets) sigs)))
 	    (else
-	     (error 'parse-signature
-		    "bad one-pass signature"
-		    #f))))))
+	     (openpgp-error "parse-signature"
+		"bad one-pass signature"
+		#f))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    parse-literal ...                                                */
@@ -389,9 +390,9 @@
       (warning "discarding packets"))
    (when (or (null? packets)
 	     (not (isa? (car packets) PGP-Literal-Packet)))
-      (error 'parse-literal
-	     "bad Literal"
-	     #f))
+      (openpgp-error "parse-literal"
+	 "bad Literal"
+	 #f))
    (instantiate::PGP-Literal
       (literal (car packets))))
 
@@ -432,7 +433,7 @@
    (define (safe-read-line p)
       (let ((l (read-line p)))
 	 (when (eof-object? l)
-	    (error "read-armored" "unexpected end of file" #f))
+	    (openpgp-error "read-armored" "unexpected end of file" #f))
 	 l))
    
    (define (decode-header l)
@@ -442,25 +443,27 @@
 		    (substring l (+fx pos 1) (string-length l))))))
    
    (define (verify-checksum data p)
-      (define (chksum-error)
-	 (error "read-armored" "bad checksum" #f))
+      
+      (define (chksum-error msg)
+	 (openpgp-error "read-armored" "bad checksum" msg))
+      
       (let ((c (read-char p)))
-	 (when (or (not (char? c))
-		   (not (char=? c #\=)))
-	    (chksum-error))
-	 (let ((line (read-line p))
-	       (expected (create-chksum64 data)))
-	    (trace-item "checksum line=" line)
-	    (trace-item "expected chksum=" expected)
-	    (when (eof-object? line) (chksum-error))
-	    (when (not (string=? line expected)) (chksum-error)))))
+	 (unless (eof-object? c)
+	    (when (or (not (char? c)) (not (char=? c #\=)))
+	       (chksum-error (format "bad character `~s'" c)))
+	    (let ((line (read-line p))
+		  (expected (create-chksum64 data)))
+	       (trace-item "checksum line=" line)
+	       (trace-item "expected chksum=" expected)
+	       (when (eof-object? line) (chksum-error "premature eof"))
+	       (unless (string=? line expected) (chksum-error line))))))
    
    (with-trace 'pgp "armored-pipe-port"
       (trace-item "p=" p)
       (let ((l (safe-read-line p)))
 	 (when (not (and (string-prefix? "-----BEGIN" l)
 			 (string-suffix? "-----" l)))
-	    (error "read-armored" "not an armored file" l))
+	    (openpgp-error "read-armored" "not an armored file" l))
 	 (trace-item "l=\"" l "\"")
 	 (let ((main-header-info (substring l 11 (-fx (string-length l) 5))))
 	    (let loop ((headers '()))
@@ -480,7 +483,7 @@
 ;*---------------------------------------------------------------------*/
 ;*    decode-pgp ...                                                   */
 ;*---------------------------------------------------------------------*/
-(define (decode-pgp p::input-port)
+(define (decode-pgp p::input-port #!key ignore-bad-packet)
    (with-trace 'pgp "decode-pgp"
       (trace-item "p=" p)
       (let ((first-chars (read-chars 10 p)))
@@ -488,35 +491,36 @@
 	 (unread-string! first-chars p)
 	 (if (string=? "-----BEGIN" first-chars)
 	     (receive (main-header-info headers composition)
-		(decode-armored-pgp p)
+		(decode-armored-pgp p ignore-bad-packet)
 		;; discard the headers. If the user wants them he has to
 		;; call the armored function directly.
 		composition)
-	     (decode-native-pgp p)))))
+	     (decode-native-pgp p ignore-bad-packet)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    decode-armored-pgp ...                                           */
 ;*---------------------------------------------------------------------*/
-(define (decode-armored-pgp p::input-port)
+(define (decode-armored-pgp p::input-port ignore-bad-packet)
    (with-trace 'pgp "decode-armored-pgp"
       (receive (main-header-info headers pp)
 	 (armored-pipe-port p)
 	 (unwind-protect
-	    (values main-header-info headers (decode-pgp-content pp))
+	    (values main-header-info headers
+	       (decode-pgp-content pp ignore-bad-packet))
 	    (close-input-port pp)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    decode-native-pgp ...                                            */
 ;*---------------------------------------------------------------------*/
-(define (decode-native-pgp p::input-port)
+(define (decode-native-pgp p::input-port ignore-bad-packet)
    (with-trace 'pgp "decode-native-pgp"
-      (decode-pgp-content p)))
+      (decode-pgp-content p ignore-bad-packet)))
 
 ;*---------------------------------------------------------------------*/
 ;*    encode-pgp ::PGP-Composition ...                                 */
 ;*---------------------------------------------------------------------*/
 (define-generic (encode-pgp this::PGP-Composition p::output-port)
-   (error 'encode-pgp
+   (openpgp-error 'encode-pgp
 	  "Not yet implemented"
 	  this))
 

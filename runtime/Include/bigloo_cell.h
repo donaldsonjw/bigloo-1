@@ -3,7 +3,7 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Sat Mar  5 08:05:01 2016                          */
-/*    Last change :  Sat Dec  7 18:56:05 2019 (serrano)                */
+/*    Last change :  Wed Jul 28 07:48:20 2021 (serrano)                */
 /*    Copyright   :  2016-21 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Bigloo CELLs                                                     */
@@ -65,7 +65,7 @@ struct bgl_cell {
 #if( !defined( TAG_CELL ) )
 #  define IFN_CELL_TAG( expr ) expr
 #else
-#  define IFN_CELL_TAG( expr )
+#  define IFN_CELL_TAG( expr ) 0
 #endif   
 
 #define BGL_INIT_CELL( an_object, v ) \
@@ -104,11 +104,12 @@ struct bgl_cell {
 #   define MAKE_STACK_CELL( v ) MAKE_CELL( v )   
 #endif
 
-#define MAKE_CELL_STACK( v, b ) \
-   (b.val = v, BCELL( &b ))
-
 #define BGL_MAKE_CELL_STACK( c, v ) \
-   (c.val = v, BCELL( &c ))
+   (IFN_CELL_TAG(c.header = MAKE_HEADER(CELL_TYPE, CELL_SIZE)),	\
+    c.val = v, \
+    BCELL( &c ))
+
+#define MAKE_CELL_STACK( v, b ) BGL_MAKE_CELL_STACK(b, v)
 
 /*---------------------------------------------------------------------*/
 /*    api                                                              */

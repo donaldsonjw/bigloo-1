@@ -3,7 +3,7 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Mon Sep 14 09:03:27 1992                          */
-/*    Last change :  Sat Dec  7 18:55:45 2019 (serrano)                */
+/*    Last change :  Tue Jun 22 11:29:08 2021 (serrano)                */
 /*    -------------------------------------------------------------    */
 /*    Implementing call/cc                                             */
 /*=====================================================================*/
@@ -28,7 +28,7 @@ extern obj_t make_fx_procedure( obj_t (*)(), int, int );
 extern obj_t c_constant_string_to_string( char * );
 
 static obj_t callcc_restore_stack( obj_t, obj_t, char ** );
-extern obj_t unwind_stack_until( obj_t, obj_t, obj_t, obj_t );
+extern obj_t unwind_stack_until( obj_t, obj_t, obj_t, obj_t, obj_t );
 extern bool_t unwind_stack_value_p( obj_t );
 extern void *bgl_get_top_of_stack();
 extern obj_t  bgl_current_dynamic_env();
@@ -78,7 +78,7 @@ wind_stack( struct befored *bfl ) {
 /*    apply_continuation ...                                           */
 /*    -------------------------------------------------------------    */
 /*    When applying a continuation, we first unwind the stack.         */
-/*    Either we reached the stack bottom and we have to restore        */
+/*    Either we reach the stack bottom and we have to restore          */
 /*    the whole stack. Either, we find the escape procedure            */
 /*    and we stop.                                                     */
 /*---------------------------------------------------------------------*/
@@ -90,6 +90,7 @@ apply_continuation( obj_t kont, obj_t value ) {
    obj_t estamp;
    const obj_t env = BGL_CURRENT_DYNAMIC_ENV();
    struct exitd ctop;
+   void *tracesp;
 
    if( !PROCEDUREP( kont ) ||
        ((obj_t)(PROCEDURE_ENTRY( kont )) != ((obj_t)&apply_continuation)) )
@@ -103,6 +104,7 @@ apply_continuation( obj_t kont, obj_t value ) {
    stack = PROCEDURE_REF( kont, 0 );
    etop = STACK( stack ).exitd_top;
    estamp = STACK( stack ).stamp;
+   tracesp = STACK( stack ).trace_sp;
    
    restore = make_fx_procedure( callcc_restore_stack, 1, 1 );
    PROCEDURE_SET( restore, 0, kont );
@@ -113,7 +115,7 @@ apply_continuation( obj_t kont, obj_t value ) {
 		 "attempted to apply foreign continuation (created in another thread)",
 		 kont ); 
 	 
-   return unwind_stack_until( (obj_t)(etop), estamp, value, restore );
+   return unwind_stack_until( (obj_t)(etop), estamp, value, restore, tracesp );
 }
 
 /*---------------------------------------------------------------------*/
@@ -148,7 +150,7 @@ callcc_init_stack() {
    BGL_ENV_EXITD_TOP_SET( env, STACK( stack ).exitd_top );
 
    /* jump to the continuation, evaluting the DYNAMIC-WIND's after thunks */
-   unwind_stack_until( (obj_t)(BGL_ENV_EXITD_TOP( env )), stamp, s_value, BFALSE );
+   unwind_stack_until( (obj_t)(BGL_ENV_EXITD_TOP( env )), stamp, s_value, BFALSE, STACK( stack ).trace_sp );
 }
 
 void (*__callcc_init_stack)() = &callcc_init_stack;
@@ -276,8 +278,9 @@ call_cc( obj_t proc ) {
       char *stack_top;
       unsigned long stack_size;
       obj_t aux;
+      
       /* We push the exit taking care that it is a callcc exit. */
-      PUSH_ENV_EXIT( env, (obj_t)(&jmpbuf), EXITD_CALLCC );
+      PUSH_ENV_EXIT_CALLCC( env, (obj_t)(&jmpbuf), EXITD_CALLCC );
       
       /* sur sparc, il est indispensables de flusher les registres. */
       flush_regs_in_stack();
@@ -302,6 +305,7 @@ call_cc( obj_t proc ) {
       STACK( stack ).before_top = BGL_ENV_BEFORED_TOP( env );
       STACK( stack ).stack_top  = stack_top;
       STACK( stack ).stack_bot  = BGL_ENV_STACK_BOTTOM( env );
+      STACK( stack ).trace_sp   = BGL_ENV_GET_TOP_OF_FRAME( env );
       
       /* on construit la continuation */
       continuation = make_fx_procedure( &apply_continuation, 1, 2 );

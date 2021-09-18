@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Sun Aug  7 11:47:46 1994                          */
-;*    Last change :  Mon Mar 16 06:02:14 2020 (serrano)                */
+;*    Last change :  Sun Jun 13 08:37:25 2021 (serrano)                */
 ;*    Copyright   :  1992-2021 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The command line arguments parsing                               */
@@ -510,6 +510,11 @@
        (set! *optim-uncell?* #t))
       (("-fno-uncell" (help "Disable cell removal"))
        (set! *optim-uncell?* #f))
+      ;; with-handler/bind-exit
+      (("-flocal-exit" (help "Inline with-handler and bind-exit"))
+       (set! *local-exit?* #t))
+      (("-fno-local-exit" (help "Compile with-handler and bind-exit in separate functions"))
+       (set! *local-exit?* #f))
       ;; saw register allocation
       (("-fsaw-realloc" (help "Enable saw register re-allocation"))
        (set! *saw-register-reallocation?* #t))
@@ -1251,6 +1256,7 @@
       (set! *optim-dataflow-types?* #t)
       (set! *optim-initflow?* #t)
       (set! *optim-tagged-fxop?* #t)
+;*       (set! *local-exit?* #t)                                       */
       ;; (set! *optim-narrow?* #t)
       ;; (set! *optim-return?* #t)
       (set! *optim-cfa-free-var-tracking?* #t)

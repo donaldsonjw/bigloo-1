@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/comptime/Cfa/type.scm                */
+;*    serrano/prgm/project/bigloo/bigloo/comptime/Cfa/type.scm         */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Jun 27 10:33:17 1996                          */
-;*    Last change :  Fri Apr 21 18:47:05 2017 (serrano)                */
-;*    Copyright   :  1996-2017 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Sat Sep  4 15:13:38 2021 (serrano)                */
+;*    Copyright   :  1996-2021 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    We make the obvious type election (taking care of tvectors).     */
 ;*=====================================================================*/
@@ -13,7 +13,8 @@
 ;*    The module                                                       */
 ;*---------------------------------------------------------------------*/
 (module cfa_type
-   (include "Tools/trace.sch")
+   (include "Tools/trace.sch"
+	    "Cfa/set.sch")
    (import  type_type
 	    type_cache
 	    type_typeof
@@ -29,7 +30,9 @@
 	    cfa_tvector
 	    cfa_closure
 	    tvector_tvector
-	    object_class)
+	    object_class
+	    (node-key cfa_approx)
+	    (node-key-set! cfa_approx))
    (export  (type-settings! globals)
 	    (get-approx-type ::approx ::obj)))
 
@@ -87,14 +90,14 @@
 ;*---------------------------------------------------------------------*/
 (define (get-approx-type approx node)
    (let ((type (approx-type approx))
-	 (alloc-list (set->list (approx-allocs approx))))
+	 (allocs (approx-allocs approx)))
       (cond
-	 ((not (pair? alloc-list))
+	 ((=fx (set-length allocs) 0)
 	  type)
 	 ((approx-top? approx)
 	  *obj*)
-	 ((every make-vector-app? alloc-list)
-	  (let* ((app (car alloc-list))
+	 ((set-every make-vector-app? allocs)
+	  (let* ((app (set-head allocs))
 		 (tv-type (get-vector-item-type app))
 		 (value-approx (make-vector-app-value-approx app))
 		 (item-type (approx-type value-approx))
@@ -103,12 +106,12 @@
 		((type? tv) tv)
 		((eq? type *_*) *vector*)
 		(else type))))
-	 ((every valloc/Cinfo+optim? alloc-list)
+	 ((set-every valloc/Cinfo+optim? allocs)
 	  (if (not (tvector-optimization?))
 	      (if (eq? type *_*)
 		  *vector*
 		  type)
-	      (let* ((app (car alloc-list))
+	      (let* ((app (set-head allocs))
 		     (tv-type (get-vector-item-type app))
 		     (value-approx (valloc/Cinfo+optim-value-approx app))
 		     (item-type (approx-type value-approx))
@@ -566,10 +569,11 @@
 ;*    type-node! ::set-ex-it ...                                       */
 ;*---------------------------------------------------------------------*/
 (define-method (type-node! node::set-ex-it)
-   (with-access::set-ex-it node (var body)
+   (with-access::set-ex-it node (var body onexit)
       (let ((v (var-variable var)))
 	 (type-variable! (local-value v) v))
       (set! body (type-node! body))
+      (set! onexit (type-node! onexit))
       (set! var (type-node! var))
       node))
 

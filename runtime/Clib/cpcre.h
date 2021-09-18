@@ -3,7 +3,7 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Mon Jan 14 15:13:55 2019                          */
-/*    Last change :  Thu Aug  8 13:35:02 2019 (serrano)                */
+/*    Last change :  Sat Apr 24 16:31:28 2021 (serrano)                */
 /*    Copyright   :  2019-21 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Bigloo PCRE binding.                                             */
@@ -32,10 +32,10 @@ static obj_t noraise_symbol = BUNSPEC;
 #define PCRE_BGLNORAISE PCRE_DUPNAMES
 
 /*---------------------------------------------------------------------*/
-/*    void                                                             */
+/*    static void                                                      */
 /*    bgl_pcre_options_init ...                                        */
 /*---------------------------------------------------------------------*/
-void
+static void
 bgl_pcre_options_init() {
    if( utf8_symbol == BUNSPEC ) {
       utf8_symbol = string_to_symbol( "UTF8");
@@ -171,7 +171,7 @@ bgl_regmatch_n( obj_t re, char *string, obj_t vres, int beg, int len, int offset
 
    string += offset;
 //   fprintf( stderr, "BGL_REGMATCH_N beg=%d len=%d offset=%d {%c%c%c}\n", beg, len, offset, string[ 0 ], string [1], string[2] );
-   
+
    r = pcre_exec( BGL_REGEXP_PCRE( re ), BGL_REGEXP( re ).study,
 		  string, len, beg, 0, ovect, oveccount * 3 );
 
@@ -276,7 +276,7 @@ bgl_pcre_regcomp_finalize( obj_t re, obj_t _ ) {
 #define CHAR_ESCAPE_REGEXP( pat, options ) \
    (STRING_LENGTH( pat ) == 2 \
     && STRING_REF( pat, 0 ) == '\\' \
-    && !strchr( "\\-$[*+?.(", STRING_REF( pat, 0 ) ) \
+    && strchr( "\\-$[*+?.(", STRING_REF( pat, 1 ) ) \
     && !(options & PCRE_CASELESS))
 
 /*---------------------------------------------------------------------*/
@@ -290,7 +290,7 @@ bgl_regcomp( obj_t pat, obj_t optargs, bool_t finalize ) {
    int erroffset;
    int options = bgl_pcre_options( optargs );
    static int init = 1000;
-
+   
    if( CHAR_REGEXP( pat, options ) ) {
       BGL_REGEXP_PREG( re ) = (void *)char_compile( BSTRING_TO_STRING( pat ), options );
 	   

@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/comptime/Cfa/ltype.scm               */
+;*    serrano/prgm/project/bigloo/bigloo/comptime/Cfa/ltype.scm        */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Jun 27 10:33:17 1996                          */
-;*    Last change :  Fri Apr 21 18:42:41 2017 (serrano)                */
-;*    Copyright   :  1996-2017 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Sat Sep  4 15:18:16 2021 (serrano)                */
+;*    Copyright   :  1996-2021 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    Type election for light closures.                                */
 ;*=====================================================================*/
@@ -13,6 +13,7 @@
 ;*    The module                                                       */
 ;*---------------------------------------------------------------------*/
 (module cfa_ltype
+   (include "Cfa/set.sch")
    (import  type_type
 	    type_cache
 	    tools_shape
@@ -28,7 +29,9 @@
 	    cfa_tvector
 	    cfa_closure
 	    tvector_tvector
-	    cnst_node)
+	    cnst_node
+	    (node-key cfa_approx)
+	    (node-key-set! cfa_approx))
    (export  (light-type! globals)))
 
 ;*---------------------------------------------------------------------*/
@@ -281,10 +284,11 @@
 ;*    type-node! ::set-ex-it ...                                       */
 ;*---------------------------------------------------------------------*/
 (define-method (type-node! node::set-ex-it)
-   (with-access::set-ex-it node (var body)
+   (with-access::set-ex-it node (var body onexit)
       (let ((v (var-variable var)))
 	 (type-variable! (local-value v) v))
       (type-node! body)
+      (type-node! onexit)
       (type-node! var)))
 
 ;*---------------------------------------------------------------------*/

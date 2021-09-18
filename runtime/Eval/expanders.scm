@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Nov  3 09:58:05 1994                          */
-;*    Last change :  Sun Aug 25 09:13:12 2019 (serrano)                */
+;*    Last change :  Thu Jun 17 09:06:34 2021 (serrano)                */
 ;*    Copyright   :  2002-21 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    Expanders installation.                                          */
@@ -312,6 +312,29 @@
 		    `(bind-exit (,exit)
 			,(e (expand-progn body) e))
 		    (e `(begin ,@body) e))
+		x))
+	    ((?- :env ?env (?exit) ?body)
+	     (evepairify
+		(if (find-in-body exit body)
+		    `(bind-exit (,exit)
+			,(e (expand-progn body) e))
+		    (e `(begin ,@body) e))
+		x))
+	    ((?- :env ?env (?exit) ?body ?onexit)
+	     (evepairify
+		(let ((exit2 (gensym 'exit))
+		      (flag (gensym 'flag))
+		      (val (gensym 'val)))
+		   (e `(let ((,flag #f))
+			  (let ((,val (bind-exit (,exit2)
+					 (let ((,exit (lambda (v)
+							 (set! ,flag #t)
+							 (,exit2 v))))
+					    ,body))))
+			     (if ,flag
+				 ,onexit
+				 ,val)))
+		      e))
 		x))
 	    (else
 	     (expand-error "bind-exit" "Illegal form" x)))))

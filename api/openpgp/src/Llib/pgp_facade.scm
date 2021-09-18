@@ -7,7 +7,8 @@
 	   __openpgp-util
 	   __openpgp-s2k
 	   __openpgp-algo
-	   __openpgp-human)
+	   __openpgp-human
+	   __openpgp-error)
    (export (pgp-composition?::bool obj)
 	   (pgp-read-string str::bstring)
 	   (pgp-read-port iport::input-port)
@@ -29,7 +30,8 @@
 	      (password-provider (lambda (key) #f))
 	      (key-manager (lambda (key) '()))
 	      (hash-algo 'sha-1)
-	      (symmetric-algo 'cast5))
+	      (symmetric-algo 'cast5)
+	      (ignore-bad-packets #f))
 	   (pgp-encrypt msg::bstring keys::pair-nil
 	      passwords::pair-nil
 	      #!key
@@ -67,7 +69,7 @@
       (trace-item "file=" file)
       (let ((p (open-input-file file)))
 	 (when (not p)
-	    (error "pgp-read-file" "Couldn't open file" file))
+	    (openpgp-error "pgp-read-file" "Couldn't open file" file))
 	 (unwind-protect
 	    (decode-pgp p)
 	    (close-input-port p)))))
@@ -84,7 +86,7 @@
 
 (define (pgp-write-port oport::output-port composition #!key (format 'armored))
    (when (not (isa? composition PGP-Composition))
-      (error "pgp-write-port"
+      (openpgp-error "pgp-write-port"
 	     "Expected PGP Composition"
 	     composition))
    (if (eq? format 'armored)
@@ -127,12 +129,12 @@
        (with-access::PGP-Key key (subkeys)
 	  (let ((main-key (car subkeys)))
 	     (when (not (good-for-signature? main-key))
-		(error "extract-subkey"
+		(openpgp-error "extract-subkey"
 		   "Couldn't find suitable key for signature."
 		   #f))
 	     main-key)))
       ((not (isa? key PGP-Key))
-       (error "extract-subkey"
+       (openpgp-error "extract-subkey"
 	  (format "PGP-key expected (got a ~a)" (typeof key))
 	  key))
       (else
@@ -140,12 +142,12 @@
 	  (cond
 	     ((null? subkeys)
 	      ;; can this happen?
-	      (error "extract-subkey"
+	      (openpgp-error "extract-subkey"
 		     "Couldn't find subkey"
 		     #f))
 	     ((null? (cdr subkeys))
 	      (when (not (good-for-encryption? (car subkeys)))
-		 (error "extract-subkey"
+		 (openpgp-error "extract-subkey"
 			"Couldn't find subkey for encryption"
 			#f))
 	      (car subkeys))
@@ -158,11 +160,11 @@
 					      subkeys)))
 		 (cond
 		    ((null? possible-subkeys)
-		     (error "extract-subkey"
+		     (openpgp-error "extract-subkey"
 			    "Couldn't find suitable subkey"
 			    key))
 		    ((not (null? (cdr possible-subkeys)))
-		     (error "extract-subkey"
+		     (openpgp-error "extract-subkey"
 			    "Found more than one suitable subkey."
 			    (map (lambda (subkey)
 				    (with-access::PGP-Subkey subkey (key-packet)
@@ -206,7 +208,7 @@
 				    :hash-algo hash-algo
 				    :detached-signature? #f))))
 	 (else
-	  (error "pgp-sign" "Bad Key" key)))))
+	  (openpgp-error "pgp-sign" "Bad Key" key)))))
 
 ;; key-manager must return a list of all subkeys that match a given key-id.
 ;; the optional msg parameter will only be used for detached signatures.
@@ -214,14 +216,14 @@
 (define (pgp-verify::pair-nil signature key-manager::procedure
 			      #!key (msg #f))
    (when (not (isa? signature PGP-Signature))
-      (error "pgp-verify" "not a signature" signature))
+      (openpgp-error "pgp-verify" "not a signature" signature))
    (verify-pgp-signature signature key-manager msg))
 
 
 ;; returns the signature's message, or #f if there is non in the composition.
 (define (pgp-signature-message signature)
    (when (not (isa? signature PGP-Signature))
-      (error "pgp-verify" "not a signature" signature))
+      (openpgp-error "pgp-verify" "not a signature" signature))
    (let ((sig-msg (with-access::PGP-Signature signature (msg) msg)))
       (and sig-msg
 	   (with-access::PGP-Literal-Packet sig-msg (data)
@@ -251,20 +253,21 @@
 	 (session-keys '())
 	 (encrypted-data packet))))
 
+;*---------------------------------------------------------------------*/
+;*    pubkey-decrypt ...                                               */
+;*---------------------------------------------------------------------*/
 (define (pubkey-decrypt encrypted::PGP-Symmetrically-Encrypted-Packet
-			pubkey-session-packets key-manager password-provider)
+	   pubkey-session-packets key-manager password-provider
+	   ignore-bad-packets)
+   
    (define (try-decrypt session-packet subkey)
-      (with-handler
-	 (lambda (e)
-	    (trace-item "Exception: " e)
-	    #f)
-	 (receive (algo key-string)
-	    (decrypt-public-key-session-key session-packet subkey password-provider)
-	    (trace-item "public-key-session-key decription succeeded, len="
-	       (with-access::PGP-Symmetrically-Encrypted-Packet encrypted (data)
-		  (string-length data)))
-	    (symmetric-decrypt encrypted key-string algo))))
-
+      (receive (algo key-string)
+	 (decrypt-public-key-session-key session-packet subkey password-provider)
+	 (trace-item "public-key-session-key decription succeeded, len="
+	    (with-access::PGP-Symmetrically-Encrypted-Packet encrypted (data)
+	       (string-length data)))
+	 (symmetric-decrypt encrypted key-string algo ignore-bad-packets)))
+   
    (with-trace 'pgp "pubkey-decrypt"
       (if (and (procedure? key-manager) (correct-arity? key-manager 1))
 	  (unless (null? pubkey-session-packets)
@@ -273,14 +276,19 @@
 		    (subkeys (or (key-manager key-id) '())))
 		(for-each (lambda (k)
 			     (trace-item "key=" (pgp-subkey->human-readable k)))
-			  subkeys)
+		   subkeys)
 		(or (any (lambda (subkey) (try-decrypt pack subkey)) subkeys)
 		    (pubkey-decrypt encrypted (cdr pubkey-session-packets)
-				    key-manager password-provider))))
-	  (error "decrypt" "Illegal key-manager" key-manager))))
+		       key-manager password-provider
+		       ignore-bad-packets))))
+	  (openpgp-error "decrypt" "Illegal key-manager" key-manager))))
 
+;*---------------------------------------------------------------------*/
+;*    pwd-decrypt ...                                                  */
+;*---------------------------------------------------------------------*/
 (define (pwd-decrypt encrypted::PGP-Symmetrically-Encrypted-Packet
-		     password-session-packets passkey-provider)
+	   password-session-packets passkey-provider
+	   ignore-bad-packets)
    (define (try-decrypt session-packet passkey)
       (with-handler
 	 (lambda (e)
@@ -289,30 +297,31 @@
 	 (receive (algo key-string)
 	    (decrypt-symmetric-key-session-key session-packet passkey)
 	    (trace-item "symmetric-key-session-key decription succeeded")
-	    (symmetric-decrypt encrypted key-string algo))))
-
+	    (symmetric-decrypt encrypted key-string algo ignore-bad-packets))))
+   
    (with-trace 'pgp "pwd-decrypt"
       (if (and (procedure? passkey-provider) (correct-arity? passkey-provider 0))
 	  (unless (null? password-session-packets)
 	     (let ((passkey (passkey-provider)))
 		(any (lambda (packet) (try-decrypt packet passkey))
-		     password-session-packets)))
-	  (error "decrypt" "Illegal passkey-provider" passkey-provider))))
+		   password-session-packets)))
+	  (openpgp-error "decrypt" "Illegal passkey-provider" passkey-provider))))
 
 ;*---------------------------------------------------------------------*/
 ;*    pgp-decrypt ...                                                  */
 ;*---------------------------------------------------------------------*/
 (define (pgp-decrypt encrypted
-		     #!key
-		     (passkey-provider (lambda () #f))
-		     (password-provider (lambda (key) #f))
-		     (key-manager (lambda (key) '()))
-		     (hash-algo 'sha-1)
-		     (symmetric-algo 'cast5))
-
+	   #!key
+	   (passkey-provider (lambda () #f))
+	   (password-provider (lambda (key) #f))
+	   (key-manager (lambda (key) '()))
+	   (hash-algo 'sha-1)
+	   (symmetric-algo 'cast5)
+	   (ignore-bad-packets #f))
+   
    (when (not (isa? encrypted PGP-Encrypted))
-      (error "pgp-decrypt" "Expected PGP-composition." encrypted))
-
+      (openpgp-error "pgp-decrypt" "Expected PGP-composition." encrypted))
+   
    (with-trace 'pgp "pgp-decrypt"
       (with-access::PGP-Encrypted encrypted (session-keys encrypted-data)
 	 (with-access::PGP-Symmetrically-Encrypted-Packet encrypted-data (data)
@@ -328,28 +337,31 @@
 	 (let* ((skeys (if (pair? session-keys)
 			   session-keys
 			   (list
-			    (instantiate::PGP-Symmetric-Key-Encrypted-Session-Key-Packet
-			       (version 4)
-			       (algo symmetric-algo)
-			       (s2k (make-s2k 'simple
-					      hash-algo
-					      #f #f))
-			       (encrypted-session-key #f)))))
+			      (instantiate::PGP-Symmetric-Key-Encrypted-Session-Key-Packet
+				 (version 4)
+				 (algo symmetric-algo)
+				 (s2k (make-s2k 'simple
+					 hash-algo
+					 #f #f))
+				 (encrypted-session-key #f)))))
 		(pubkey-session-packets
-		 (filter (lambda (x)
-			    (isa? x PGP-Public-Key-Encrypted-Session-Key-Packet))
-			 skeys))
+		   (filter (lambda (x)
+			      (isa? x PGP-Public-Key-Encrypted-Session-Key-Packet))
+		      skeys))
 		(password-session-packets
-		 (filter (lambda (x)
-			    (isa? x PGP-Symmetric-Key-Encrypted-Session-Key-Packet))
-			 skeys)))
+		   (filter (lambda (x)
+			      (isa? x PGP-Symmetric-Key-Encrypted-Session-Key-Packet))
+		      skeys)))
 	    ;; first try the public keys, then only the password.
 	    (let* ((decrypted (or (pubkey-decrypt encrypted-data
-						  pubkey-session-packets
-						  key-manager password-provider)
+				     pubkey-session-packets
+				     key-manager
+				     password-provider
+				     ignore-bad-packets)
 				  (pwd-decrypt encrypted-data
-					       password-session-packets
-					       passkey-provider))))
+				     password-session-packets
+				     passkey-provider
+				     ignore-bad-packets))))
 	       (when (and (pair? decrypted)
 			  (isa? (car decrypted) PGP-Compressed-Packet))
 		  (with-access::PGP-Compressed-Packet (car decrypted) (packets)
@@ -361,7 +373,7 @@
 		   #f)
 		  ((and (null? decrypted) (not (pair? decrypted)))
 		   (trace-item "no encrypted data.")
-		   (error "pgp-decrypt" "No or bad encrypted data" #f))
+		   (openpgp-error "pgp-decrypt" "No or bad encrypted data" #f))
 		  ((isa? (car decrypted) PGP-Literal-Packet)
 		   (when (not (null? (cdr decrypted)))
 		      (warning "ignoring trailing packet(s)"))
@@ -383,9 +395,9 @@
 		      (trace-item "creation-date: " creation-date)
 		      data))
 		  (else
-		   (error "pgp-decrypt"
-			  "Don't know what to do with decrypted data"
-			  #f))))))))
+		   (openpgp-error "pgp-decrypt"
+		      "Don't know what to do with decrypted data"
+		      #f))))))))
 
 ;; for simplicity we use the symmetric-algo for both the password encryption
 ;; and the data encryption. Should be fairly easy to change.
@@ -410,11 +422,11 @@
 
    (with-trace 'pgp "pgp-encrypt"
       (when (not (symbol? hash-algo))
-	 (error "pgp-encrypt"
+	 (openpgp-error "pgp-encrypt"
 		"Expected symbol as hash algorithm"
 		hash-algo))
       (when (not (symbol? symmetric-algo))
-	 (error "pgp-encrypt"
+	 (openpgp-error "pgp-encrypt"
 		"Expected symbol as symmetric key algorithm"
 		symmetric-algo))
    

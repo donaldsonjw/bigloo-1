@@ -1,9 +1,9 @@
 /*=====================================================================*/
-/*    /tmp/OFAOT/nan/lib/bigloo/4.3h/bigloo.h                          */
+/*    serrano/prgm/project/bigloo/bigloo/runtime/Include/bigloo.h      */
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Thu Mar 16 18:48:21 1995                          */
-/*    Last change :  Tue Apr 28 10:36:27 2020 (serrano)                */
+/*    Last change :  Fri Jun 25 13:23:13 2021 (serrano)                */
 /*    -------------------------------------------------------------    */
 /*    Bigloo's stuff                                                   */
 /*=====================================================================*/
@@ -95,6 +95,13 @@ extern "C" {
 /*---------------------------------------------------------------------*/
 #if( !defined( BIGLOO_EXIT ) )
 #  define BIGLOO_EXIT bigloo_exit
+#endif
+
+/*---------------------------------------------------------------------*/
+/*    BIGLOO_TRACE (overriden by generated code).                      */
+/*---------------------------------------------------------------------*/
+#if (!defined(BIGLOO_TRACE))
+#  define BIGLOO_TRACE 0
 #endif
 
 /*---------------------------------------------------------------------*/
@@ -662,6 +669,8 @@ union scmobj {
       char *stack_top;
       /* bottom of stack */
       char *stack_bot;
+      /* trace sp */
+      void *trace_sp;
       /* heap allocated copy of the stack */
       void *stack;
    } stack;
@@ -807,6 +816,9 @@ union scmobj {
 #  if( BGL_REGEXP_TYPE == BGL_REGEXP_pcre )
       /* pcre regular expression */
       void *study;
+#  endif
+#  if( BGL_REGEXP_TYPE == BGL_REGEXP_pcre2 )
+      void *match_data;
 #  endif
       int capturecount;
    } regexp;
@@ -1192,6 +1204,21 @@ typedef obj_t (*function_t)();
 #define BGL_MAKE_FX_PROCEDURE_STACK( tmp, entry, arity, size ) \
    bgl_init_fx_procedure( (obj_t)(&tmp), entry, arity, size )
 
+#if BIGLOO_UNSAFE
+#  define bgl_init_fx_procedure(proc, entry, arity, size) \
+   BGL_INIT_FX_PROCEDURE((proc), entry, arity, size)
+#else
+BGL_RUNTIME_DECL obj_t bgl_init_fx_procedure(obj_t, function_t, int, int);
+#endif
+   
+#define BGL_INIT_FX_PROCEDURE(_proc, _entry, _arity, _size) \
+   (_proc->procedure.header = MAKE_HEADER(PROCEDURE_TYPE, _size), \
+    _proc->procedure.entry = _entry, \
+    _proc->procedure.va_entry = 0L, \
+    _proc->procedure.attr = BUNSPEC, \
+    _proc->procedure.arity = _arity, \
+    BREF(_proc))
+   
 #define BGL_PROCEDURE_BYTE_SIZE( size ) \
    (PROCEDURE_SIZE + ((size-1) * OBJ_SIZE))
 	 
@@ -1926,7 +1953,7 @@ BGL_RUNTIME_DECL obj_t (*bgl_multithread_dynamic_denv)();
 #define BGL_ENV_EXITD_TOP( env ) \
    (BGL_DYNAMIC_ENV( env ).exitd_top)
 #define BGL_ENV_EXITD_TOP_SET( env, _1 ) \
-   (BGL_DYNAMIC_ENV( env ).exitd_top = (_1), BUNSPEC)
+   (BGL_DYNAMIC_ENV( env ).exitd_top = (_1))
    
 #define BGL_ENV_EXITD_VAL( env ) \
    (BGL_DYNAMIC_ENV( env ).exitd_val)
@@ -2039,6 +2066,8 @@ BGL_RUNTIME_DECL obj_t (*bgl_multithread_dynamic_denv)();
 
 #define BGL_EXITD_TOP_AS_OBJ() \
    ((obj_t)BGL_EXITD_TOP())
+#define BGL_ENV_EXITD_TOP_AS_OBJ(env) \
+   ((obj_t)BGL_ENV_EXITD_TOP(env))
 
 #define BGL_EXITD_VAL() \
    BGL_ENV_EXITD_VAL( BGL_CURRENT_DYNAMIC_ENV() )
@@ -2113,20 +2142,24 @@ BGL_RUNTIME_DECL obj_t (*bgl_multithread_dynamic_denv)();
 #define BGL_ENV_SET_TOP_OF_FRAME( env, _top ) \
    (BGL_ENV_GET_TOP_OF_FRAME( env ) = (_top))
 
+#define BGL_GET_TRACE_STACKSP() \
+   ((obj_t)BGL_ENV_GET_TOP_OF_FRAME( BGL_CURRENT_DYNAMIC_ENV() ) )
+#define BGL_SET_TRACE_STACKSP(_sp) \
+   BGL_ENV_SET_TOP_OF_FRAME( BGL_CURRENT_DYNAMIC_ENV(), (struct bgl_dframe *)(_sp) )
+
 #define BGL_ENV_PUSH_TRACE( env, nm, loc ) \
    struct bgl_dframe bgl_dframe; \
-   struct bgl_dframe *bgl_link; \
     \
    bgl_dframe.name = nm; \
    bgl_dframe.location = loc; \
-   bgl_link = bgl_dframe.link = BGL_ENV_GET_TOP_OF_FRAME( env ); \
+   bgl_dframe.link = BGL_ENV_GET_TOP_OF_FRAME( env ); \
    BGL_ENV_SET_TOP_OF_FRAME( env, &bgl_dframe );      
    
 #define BGL_ENV_PUSH_TRACE_NAME( env, name ) \
    BGL_ENV_PUSH_TRACE( env, name, BUNSPEC )
    
 #define BGL_ENV_POP_TRACE( env ) \
-   BGL_ENV_SET_TOP_OF_FRAME( env, bgl_link );
+   BGL_ENV_SET_TOP_OF_FRAME( env, bgl_dframe.link );
 
 #define BGL_ENV_SET_TRACE_NAME( env, nm ) \
    (BGL_ENV_GET_TOP_OF_FRAME( env )->name = nm)
@@ -2345,7 +2378,6 @@ BGL_RUNTIME_DECL obj_t bgl_system_failure( int, obj_t, obj_t, obj_t );
 BGL_RUNTIME_DECL obj_t bgl_make_procedure( obj_t, int, int );
 BGL_RUNTIME_DECL obj_t make_fx_procedure( function_t, int, int );
 BGL_RUNTIME_DECL obj_t make_va_procedure( function_t, int, int );
-BGL_RUNTIME_DECL obj_t bgl_init_fx_procedure( obj_t, function_t, int, int );
 BGL_RUNTIME_DECL obj_t bgl_dup_procedure( obj_t );
 
 BGL_RUNTIME_DECL obj_t bgl_time( obj_t );

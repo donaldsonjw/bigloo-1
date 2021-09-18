@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Apr 28 10:50:15 1995                          */
-;*    Last change :  Tue Feb 26 13:55:25 2019 (serrano)                */
-;*    Copyright   :  1995-2019 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Thu Jul  8 11:31:37 2021 (serrano)                */
+;*    Copyright   :  1995-2021 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    When compiling for call/cc we put all written local variables    */
 ;*    in cells.                                                        */
@@ -89,7 +89,7 @@
 	     (bindings (map (lambda (o-n)
 			       (cons (cdr o-n)
 				  (a-make-cell
-				     (instantiate::var
+				     (instantiate::ref
 					(type (variable-type (car o-n)))
 					(loc loc)
 					(variable (car o-n)))
@@ -252,7 +252,7 @@
 				    (vtype (get-bigloo-defined-type vtype))
 				    (loc loc)
 				    (var (setq-var node))
-				    (value (instantiate::var
+				    (value (instantiate::ref
 					      (type (variable-type a-var))
 					      (loc loc)
 					      (variable a-var)))))))))))))
@@ -319,6 +319,7 @@
 ;*    callcc! ::set-ex-it ...                                          */
 ;*---------------------------------------------------------------------*/
 (define-method (callcc! node::set-ex-it)
+   (set-ex-it-onexit-set! node (callcc! (set-ex-it-onexit node)))
    (set-ex-it-body-set! node (callcc! (set-ex-it-body node)))
    node)
 

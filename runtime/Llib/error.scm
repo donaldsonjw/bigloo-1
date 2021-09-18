@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Jan 20 08:19:23 1995                          */
-;*    Last change :  Wed Apr  8 15:51:59 2020 (serrano)                */
+;*    Last change :  Thu Sep 16 15:06:27 2021 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    The error machinery                                              */
 ;*    -------------------------------------------------------------    */
@@ -17,6 +17,13 @@
 ;*---------------------------------------------------------------------*/
 (module __error
    
+   (option  (bigloo-compiler-debug-set! 0)
+            (set! *compiler-debug* 0)
+            (set! *optim-O-macro?* #f)
+            (set! *unsafe-type*    #t)
+            (set! *unsafe-arity*   #t)
+            (set! *unsafe-range*   #t))
+
    (extern  (export the_failure "the_failure")
 	    (export error/errno "bgl_system_failure")
 	    (export find-runtime-type "bgl_find_runtime_type")
@@ -25,6 +32,9 @@
 	    (export stack-overflow-error "bgl_stack_overflow_error")
 	    
 	    ($get-trace-stack::pair-nil (::int) "bgl_get_trace_stack")
+	    (macro $init-trace-stacksp::obj () "bgl_init_trace")
+	    (macro $get-trace-stacksp::obj () "BGL_GET_TRACE_STACKSP")
+	    (macro $set-trace-stacksp::obj (::obj) "BGL_SET_TRACE_STACKSP")
 	    (macro $push-trace::obj (::obj ::obj) "BGL_PUSH_TRACE")
 	    (macro $env-push-trace::obj (::dynamic-env ::obj ::obj) "BGL_ENV_PUSH_TRACE")
 	    (macro $env-set-trace-name::obj (::dynamic-env ::obj) "BGL_ENV_SET_TRACE_NAME")
@@ -32,7 +42,9 @@
 	    (macro $env-pop-trace::obj (::dynamic-env) "BGL_ENV_POP_TRACE")
 	    (macro $pop-trace::obj () "BGL_POP_TRACE")
 	    (macro $get-error-handler::obj () "BGL_ERROR_HANDLER_GET")
+	    (macro $env-get-error-handler::obj (::dynamic-env) "BGL_ENV_ERROR_HANDLER_GET")
 	    (macro $set-error-handler!::void (::obj) "BGL_ERROR_HANDLER_SET")
+	    (macro $env-set-error-handler!::void (::dynamic-env ::obj) "BGL_ENV_ERROR_HANDLER_SET")
 	    (macro $push-error-handler!::void (::obj ::obj) "BGL_ERROR_HANDLER_PUSH")
 	    (macro $get-uncaught-exception-handler::obj () "BGL_UNCAUGHT_EXCEPTION_HANDLER_GET")
 	    (macro $set-uncaught-exception-handler!::void (::obj) "BGL_UNCAUGHT_EXCEPTION_HANDLER_SET")
@@ -82,6 +94,12 @@
 	    (class foreign
 	       (method static $get-trace-stack::pair-nil (::int)
 		       "get_trace_stack")
+	       (method static $init-trace-stacksp::obj ()
+		       "init_trace_stacksp")
+	       (method static $get-trace-stacksp::obj ()
+		       "BGL_GET_TRACE_STACKSP")
+	       (method static $set-trace-stacksp::obj (::obj)
+		       "BGL_SET_TRACE_STACKSP")
 	       (method static $push-trace::obj (::obj ::obj)
 		       "PUSH_TRACE")
 	       (method static $set-trace-name::obj (::obj)
@@ -101,8 +119,12 @@
 	       
 	       (method static $get-error-handler::obj ()
 		       "BGL_ERROR_HANDLER_GET")
+	       (method static $env-get-error-handler::obj (::dynamic-env)
+		       "BGL_ENV_ERROR_HANDLER_GET")
 	       (method static $set-error-handler!::void (::obj)
 		       "BGL_ERROR_HANDLER_SET")
+	       (method static $env-set-error-handler!::void (::dynamic-env ::obj)
+		       "BGL_ENV_ERROR_HANDLER_SET")
 	       (method static $push-error-handler!::void (::obj ::obj)
 		       "BGL_ERROR_HANDLER_PUSH")
 	       (method static $get-uncaught-exception-handler::obj ()
@@ -264,16 +286,21 @@
 
 	    (&try ::procedure ::procedure)
 	    
-	    (notify-interrupt ::int))
+	    (notify-interrupt ::int)
 	    
-   (option  (bigloo-compiler-debug-set! 0)
-	    (set! *compiler-debug* 0)
-	    (set! *optim-O-macro?* #f)
-	    (set! *unsafe-type*    #t)
-	    (set! *unsafe-arity*   #t)
-	    (set! *unsafe-range*   #t))
-
-   (pragma  (typeof no-cfa-top args-safe)))
+	    (inline push-error-handler! ::procedure ::obj)
+	    (inline get-error-handler::obj)
+	    (inline env-get-error-handler ::dynamic-env)
+	    (inline set-error-handler! ::obj)
+	    (inline env-set-error-handler! ::dynamic-env ::obj))
+	    
+   (pragma  (typeof no-cfa-top args-safe)
+	    ($push-error-handler! (args-noescape))
+            (push-error-handler! (args-noescape))
+	    ($set-error-handler! (args-noescape))
+            (set-error-handler! (args-noescape))
+	    ($env-set-error-handler! (args-noescape))
+            (env-set-error-handler! (args-noescape))))
 
 ;*---------------------------------------------------------------------*/
 ;*    get-trace-stack ...                                              */
@@ -392,10 +419,10 @@
    (if (correct-arity? handler 1)
        (let ((old-handlers ($get-error-handler)))
 	  ($set-error-handler!
-	     (cons (lambda (e)
-		      ($set-error-handler! old-handlers)
-		      (handler e))
-		old-handlers))
+	     ($acons (lambda (c)
+			($set-error-handler! old-handlers)
+			(handler c))
+		#unspecified))
 	  (unwind-protect
 	     (if (correct-arity? thunk 0)
 		 (thunk)
@@ -407,29 +434,87 @@
 ;*    current-exception-handler ...                                    */
 ;*---------------------------------------------------------------------*/
 (define (current-exception-handler)
-   (if (pair? ($get-error-handler))
-       (car ($get-error-handler))
-       default-exception-handler))
+   (lambda (val)
+      (raise val)))
+   
+;*    (define (wrong-handler handler)                                  */
+;*       (tprint "wrong handler..." (current-thread))                  */
+;*       default-exception-handler)                                    */
+;* {*       (error "current-exception-handler"                            *} */
+;* {* 	 "wrong error handler" (typeof handler)))                      *} */
+;*                                                                     */
+;*    (let ((handler ($get-error-handler)))                            */
+;*       (cond                                                         */
+;* 	 ((pair? handler)                                              */
+;* 	  (cond                                                        */
+;* 	     ((dynamic-env? (cdr handler))                             */
+;* 	                                                               */
+;* 	      ((eq? (cdr handler) #unspecified)                        */
+;* 	      (car handler))                                           */
+;* 	     ((eq? (cdr handler) #f)                                   */
+;* 	      default-exception-handler)                               */
+;* 	     (else                                                     */
+;* 	      (wrong-handler handler))))                               */
+;* 	 (else                                                         */
+;* 	  (wrong-handler handler)))))                                  */
 
 ;*---------------------------------------------------------------------*/
 ;*    raise ...                                                        */
 ;*---------------------------------------------------------------------*/
 (define (raise val)
-   (let ((handlers ($get-error-handler)))
-      (if (pair? handlers)
-	  (let ((hdls (cdr handlers)))
-	     ;; ($set-error-handler! hdls)
-	     (let ((r ((car handlers) val)))
-		;; ($set-error-handler! hdls)
-		(when (isa? val &error)
-		   (with-access::&error val (fname location)
-			 (error/location "raise"
-			    "Handler return from error"
-			    val fname location)))
-		r))
-	  (begin
-	     (default-exception-handler val)
-	     (the_failure "raise" "uncaught exception" val)))))
+   
+   (define (raise/denv hdl)
+      ;; since 19 jun 2021, error handlers are pushed
+      ;; along a cell where to store the exection value
+      ;; this removes one closure allocation of 
+      ;; with-handler forms (see comptime/Expand/exit.scm)
+      (let ((denv (cdr hdl))
+	    (h (car hdl)))
+	 (set-cdr! hdl val)
+	 (unwind-until! h denv)))
+   
+   (define (raise/cell hdl)
+      ;; since 14 jun 2021, error handlers are pushed
+      ;; along a cell where to store the exection value
+      ;; this removes one closure allocation of 
+      ;; with-handler forms (see comptime/Expand/exit.scm)
+      (let ((cell (cdr hdl))
+	    (h (car hdl)))
+	 (cell-set! cell val)
+	 (unwind-until! h cell)))
+
+   (define (raise/cell hdl)
+      ;; since 14 jun 2021, error handlers are pushed
+      ;; along a cell where to store the exection value
+      ;; this removes one closure allocation of 
+      ;; with-handler forms (see comptime/Expand/exit.scm)
+      (let ((cell (cdr hdl))
+	    (h (car hdl)))
+	 (cell-set! cell val)
+	 (unwind-until! h cell)))
+   
+   (define (wrong-handler handler val)
+      (tprint "*** INTERNAL ERROR: wrong error handler " handler)
+      (tprint "when raising error: " val)
+      (exit 0))
+   
+   (let ((handler ($get-error-handler)))
+      (cond
+	 ((pair? handler)
+	  (cond
+	     ((dynamic-env? (cdr handler))
+	      (raise/denv handler))
+	     ((cell? (cdr handler))
+	      (raise/cell handler))
+	     ((not (cdr handler))
+	      (default-exception-handler val)
+	      (the_failure "raise" "uncaught exception" val))
+	     ((eq? (cdr handler) #unspecified)
+	      ((car handler) val))
+	     (else
+	      (wrong-handler handler val))))
+	 (else
+	  (wrong-handler handler val)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    default-exception-handler ...                                    */
@@ -438,7 +523,7 @@
    (exception-notify val)
    (unless (isa? val &warning)
       (let ((retval (if (isa? val &error) 1 2)))
-	 (unwind-stack-until! #f #f retval (lambda (x) (%exit retval)))))
+	 (unwind-stack-until! #f #f retval (lambda (x) (%exit retval)) #f)))
    #unspecified)
 
 ;*---------------------------------------------------------------------*/
@@ -1313,7 +1398,37 @@
 		   (exit 4))
 		(raise e)))
 	 thunk)))
-       
+
+;*---------------------------------------------------------------------*/
+;*    push-error-handler! ...                                          */
+;*---------------------------------------------------------------------*/
+(define-inline (push-error-handler! hdl exit)
+   ($push-error-handler! hdl exit))
+
+;*---------------------------------------------------------------------*/
+;*    set-error-handler! ...                                           */
+;*---------------------------------------------------------------------*/
+(define-inline (set-error-handler! ehdl)
+   ($set-error-handler! ehdl))
+
+;*---------------------------------------------------------------------*/
+;*    env-set-error-handler! ...                                       */
+;*---------------------------------------------------------------------*/
+(define-inline (env-set-error-handler! env ehdl)
+   ($env-set-error-handler! env ehdl))
+
+;*---------------------------------------------------------------------*/
+;*    get-error-handler ...                                            */
+;*---------------------------------------------------------------------*/
+(define-inline (get-error-handler)
+   ($get-error-handler))
+
+;*---------------------------------------------------------------------*/
+;*    env-get-error-handler ...                                        */
+;*---------------------------------------------------------------------*/
+(define-inline (env-get-error-handler env)
+   ($env-get-error-handler env))
+
 ;*---------------------------------------------------------------------*/
 ;*    notify-interrupt ...                                             */
 ;*---------------------------------------------------------------------*/

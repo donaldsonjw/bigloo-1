@@ -1,9 +1,9 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/comptime/Globalize/free.scm          */
+;*    .../prgm/project/bigloo/bigloo/comptime/Globalize/free.scm       */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Jan 27 14:20:15 1995                          */
-;*    Last change :  Wed May 31 10:38:56 2017 (serrano)                */
+;*    Last change :  Thu Jul  8 11:29:16 2021 (serrano)                */
 ;*    Copyright   :  1995-2021 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The search of free variables.                                    */
@@ -288,9 +288,9 @@
 ;*    node-free ::set-ex-it ...                                        */
 ;*---------------------------------------------------------------------*/
 (define-method (node-free node::set-ex-it free)
-   (with-access::set-ex-it node (var body)
+   (with-access::set-ex-it node (var body onexit)
       (bind-variable! (var-variable var) *integrator*)
-      (node-free body free)))
+      (node-free body (node-free onexit free))))
 
 ;*---------------------------------------------------------------------*/
 ;*    node-free ::jump-ex-it ...                                       */
@@ -367,7 +367,7 @@
 			       'make-va-procedure
 			       'make-fx-procedure))
 		 (node     (sexp->node `(,make-clo
-					 ,(instantiate::var
+					 ,(instantiate::ref
 					     (loc loc)
 					     (type *_*)
 					     (variable gloclo))

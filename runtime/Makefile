@@ -3,7 +3,7 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Tue Mar 21 08:14:18 1995                          */
-#*    Last change :  Fri May  1 09:20:52 2020 (serrano)                */
+#*    Last change :  Sat May  1 09:09:47 2021 (serrano)                */
 #*    Copyright   :  1995-2021 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The (gnu) makefile to build the Bigloo's library.                */
@@ -366,7 +366,8 @@ POPULATION_SI	= $(SRC_FILES) \
                   Clib/inline_alloc_bump.h \
                   Clib/inline_alloc.h \
                   Clib/inline_alloc_thread.h \
-                  Clib/cregex.h Clib/cpcre.h
+                  Clib/cregex.h Clib/cpcre.h \
+                  Clib/cregex.h Clib/cpcre2.h
 POPULATION	= $(POPULATION_SI) $(INCLUDE_FILE) \
                   Jlib/JDK13.java \
                   Jlib/JDK14.java \
@@ -645,12 +646,12 @@ boot-jvm:
 	@ $(MAKE) lib-jvm_u
 
 #*---------------------------------------------------------------------*/
-#*    bigboot                                                          */
+#*    hostboot                                                         */
 #*    -------------------------------------------------------------    */
 #*    Boot a new Bigloo using the Scheme files (instead of the C       */
 #*    pre-compiled files).                                             */
 #*---------------------------------------------------------------------*/
-bigboot:
+hostboot:
 	$(RM) -rf objs
 	@ $(MAKE) .afile
 	@ $(MAKE) objs includes dirs
@@ -1027,5 +1028,5 @@ objs/saw_s/Llib/bconfigure.o: $(BOOTLIBDIR)/bigloo_config.h
 objs/saw_u/Llib/bconfigure.o: $(BOOTLIBDIR)/bigloo_config.h
 objs/saw_s/Llib/evobject.o: Llib/object.sch
 objs/saw_u/Llib/evobject.o: Llib/object.sch
-objs/obj_s/Clib/cregexp.o: Clib/cpcre.h Clib/cregex.h
-objs/obj_u/Clib/cregexp.o: Clib/cpcre.h Clib/cregex.h
+objs/obj_s/Clib/cregexp.o: Clib/cpcre.h Clib/cpcre2.h Clib/cregex.h
+objs/obj_u/Clib/cregexp.o: Clib/cpcre.h Clib/cpcre2.h Clib/cregex.h

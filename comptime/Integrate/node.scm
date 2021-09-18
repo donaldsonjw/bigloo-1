@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/comptime/Integrate/node.scm          */
+;*    .../prgm/project/bigloo/bigloo/comptime/Integrate/node.scm       */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue Mar 14 17:30:55 1995                          */
-;*    Last change :  Fri Apr 21 18:44:42 2017 (serrano)                */
-;*    Copyright   :  1995-2020 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Thu Jul  8 11:30:27 2021 (serrano)                */
+;*    Copyright   :  1995-2021 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The computation of K and K* properties.                          */
 ;*=====================================================================*/
@@ -93,7 +93,7 @@
 	     (type (node-type body))
 	     (bindings (map (lambda (o-n)
 			       (cons (cdr o-n)
-				  (a-make-cell (instantiate::var
+				  (a-make-cell (instantiate::ref
 						  (type (variable-type (car o-n)))
 						  (loc loc)
 						  (variable (car o-n)))
@@ -215,7 +215,7 @@
 	 ;; we change the called function if globalized
 	 (when (and (local? fun) (sfun/Iinfo-G? info))
 	    (app-fun-set! node
-			  (instantiate::var
+			  (instantiate::ref
 			     (loc loc)
 			     (type (variable-type (the-global fun)))
 			     (variable (the-global fun)))))
@@ -237,7 +237,7 @@
 		   (let* ((kap   (car kaptured))
 			  (alpha (local-fast-alpha kap))
 			  (var   (if (local? alpha) alpha kap)))
-		      (loop (cons (instantiate::var
+		      (loop (cons (instantiate::ref
 				     (loc loc)
 				     (type (variable-type var))
 				     (variable var))
@@ -310,7 +310,7 @@
 				      (type *unspec*)
 				      (var (setq-var node))
 				      (vtype (get-bigloo-type vtype))
-				      (value (instantiate::var
+				      (value (instantiate::ref
 						(loc loc)
 						(type (variable-type a-var))
 						(variable a-var)))))))
@@ -387,7 +387,8 @@
 ;*    glo! ::set-ex-it ...                                             */
 ;*---------------------------------------------------------------------*/
 (define-method (glo! node::set-ex-it integrator)
-   (with-access::set-ex-it node (var body)
+   (with-access::set-ex-it node (var body onexit)
+      (set! onexit (glo! onexit integrator))
       (set! body (glo! body integrator))
       node))
 

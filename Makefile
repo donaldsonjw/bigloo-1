@@ -3,8 +3,8 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Wed Jan 14 13:40:15 1998                          */
-#*    Last change :  Fri May  1 09:55:43 2020 (serrano)                */
-#*    Copyright   :  1998-2020 Manuel Serrano, see LICENSE file        */
+#*    Last change :  Thu May  6 10:44:33 2021 (serrano)                */
+#*    Copyright   :  1998-2021 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    This Makefile *requires* GNU-Make.                               */
 #*    -------------------------------------------------------------    */
@@ -32,8 +32,7 @@
 #*                                                                     */
 #*    Private entries:                                                 */
 #*      fullbootstrap.. Bootstrap a development compiler (private)     */
-#*      c-fullbootstrap Bootstrap a development compiler (private)     */
-#*      bigboot........ Compile Bigloo on already provided plateform.  */
+#*      hostboot....... Compile Bigloo on already provided plateform.  */
 #*                      This is not guarantee to work because it       */
 #*                      requires a compatible installed Bigloo         */
 #*                      compiler (public)                              */
@@ -133,6 +132,7 @@ DIRECTORIES	= cigloo \
                   gc \
                   gmp \
                   pcre \
+                  pcre2 \
                   libunistring \
                   libuv
 
@@ -151,7 +151,25 @@ NO_DIST_FILES	= .bigloo.prcs_aux \
 #*---------------------------------------------------------------------*/
 .PHONY: checkconf boot boot-jvm boot-bde boot-api boot-bglpkg
 
-build: checkconf boot
+build: checkconf $(BOOTMETHOD)
+
+# boot from pre-bootstrapped version
+bootstrap: boot
+
+# boot from a pre-compiled version
+c: boot
+
+# boot from the source using a pre-install bigloo version
+cross:
+	$(MAKE) hostboot BGLBUILDBINDIR=$(BOOTBIGLOOBINDIR)
+
+# boot from a bare platform
+source:
+	if [ ! -x download/bin/bigloo ]; then \
+	  (cd download; tar xvfz bigloo-$(BOOTBUILDRELEASE).tar.gz); \
+	  (pwd=`pwd`; cd download/bigloo-$(BOOTBUILDRELEASE); ./configure --prefix=$$pwd/download && make && make install); \
+        fi
+	$(MAKE) cross BOOTBIGLOOBINDIR=$$PWD/download/bin
 
 checkconf:
 	@ if ! [ -f "lib/bigloo/$(RELEASE)/bigloo.h" ]; then \
@@ -170,6 +188,9 @@ boot-c: checkgmake
         fi
 	if [ "$(GCCUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C gc boot; \
+        fi
+	if [ "$(PCRE2CUSTOM)" = "yes" ]; then \
+	  $(MAKE) -C pcre2 boot; \
         fi
 	if [ "$(PCRECUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C pcre boot; \
@@ -243,7 +264,7 @@ manual-pdf:
 	@ (cd manuals && $(MAKE) bigloo.pdf)
 
 #*---------------------------------------------------------------------*/
-#*    bigboot ...                                                      */
+#*    hostboot ...                                                     */
 #*    -------------------------------------------------------------    */
 #*    Boot a new Bigloo system on a an host. This boot uses an already */
 #*    installed Bigloo on that host. That is, it recompiles, all the   */
@@ -253,44 +274,54 @@ manual-pdf:
 #*      1- configure the system:                                       */
 #*          ./configure --bootconfig                                   */
 #*      2- type something like:                                        */
-#*          make bigboot BGLBUILDBINDIR=/usr/local/bin                 */
+#*          make hostboot BGLBUILDBINDIR=/usr/local/bin                */
 #*---------------------------------------------------------------------*/
-bigboot: 
+hostboot: 
 	@ if [ "$(BGLBUILDBINDIR) " = " " ]; then \
             echo "*** Error, the variable BGLBUILDBINDIR is unbound"; \
-            echo "Use \"$(MAKE) dobigboot\" if you know what you are doing!"; \
+            echo "Use \"$(MAKE) dohostboot\" if you know what you are doing!"; \
             exit 0; \
           else \
-            $(MAKE) dobigboot; \
+            $(MAKE) dohostboot; \
           fi
 
-dobigboot:
-	@ $(MAKE) -C gc clean
-	@ $(MAKE) -C gc uninstall
-	@ $(MAKE) -C gc boot
-	@ if [ "$(GMPCUSTOM)" = "yes" ]; then \
+dohostboot:
+	$(MAKE) -C gc clean
+	$(MAKE) -C gc boot
+	if [ "$(GMPCUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C gmp clean; \
 	  $(MAKE) -C gmp boot; \
         fi
-	@ if [ "$(PCRECUSTOM)" = "yes" ]; then \
+	if [ "$(LIBUVCUSTOM)" = "yes" ]; then \
+	  $(MAKE) -C libuv clean; \
+	  $(MAKE) -C libuv boot; \
+        fi
+	if [ "$(PCRE2CUSTOM)" = "yes" ]; then \
+	  $(MAKE) -C pcre2 clean; \
+	  $(MAKE) -C pcre2 boot; \
+        fi
+	if [ "$(PCRECUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C pcre clean; \
 	  $(MAKE) -C pcre boot; \
         fi
-	@ if [ "$(UNISTRINGCUSTOM)" = "yes" ]; then \
+	if [ "$(UNISTRINGCUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C libunistring clean; \
 	  $(MAKE) -C libunistring boot; \
         fi
 	@ mkdir -p bin
-	@ $(MAKE) -C runtime bigboot BBFLAGS="-w"
-	@ $(MAKE) -C comptime -i touchall
-	@ $(MAKE) -C comptime bigboot BBFLAGS="-w -unsafeh"
-	@ $(MAKE) -C runtime heap-c BIGLOO=$(BOOTDIR)/bin/bigloo
-	@ $(MAKE) -C comptime BIGLOO=$(BOOTDIR)/bin/bigloo
-	@ $(MAKE) -C runtime clean-quick
-	@ $(MAKE) -C runtime heap libs BIGLOO=$(BOOTDIR)/bin/bigloo
-	@ $(MAKE) -C bde clean boot BIGLOO=$(BOOTDIR)/bin/bigloo
-	@ $(MAKE) -C api clean-quick BIGLOO=$(BOOTDIR)/bin/bigloo
-	@ echo "Big boot done..."
+	$(MAKE) -C runtime hostboot BBFLAGS="-w"
+	$(MAKE) -C comptime -i touchall
+	$(MAKE) -C comptime hostboot BBFLAGS="-w -unsafeh"
+	$(MAKE) -C runtime heap-c BIGLOO=$(BOOTBINDIR)/bigloo
+	$(MAKE) -C comptime BIGLOO=$(BOOTBINDIR)/bigloo
+	$(MAKE) -C runtime clean-quick
+	$(MAKE) -C runtime heap libs BIGLOO=$(BOOTBINDIR)/bigloo
+	$(MAKE) -C bde clean boot BIGLOO=$(BOOTBINDIR)/bigloo
+	$(MAKE) boot-bde BIGLOO=$(BOOTBINDIR)/bigloo
+	$(MAKE) -C api clean-quick BIGLOO=$(BOOTBINDIR)/bigloo
+	$(MAKE) boot-api BIGLOO=$(BOOTBINDIR)/bigloo
+	$(MAKE) fullbootstrap-sans-configure BGLBUILDBINDIR=$(BOOTBINDIR)
+	@ echo "hostboot done..."
 	@ echo "-------------------------------"
 
 #*---------------------------------------------------------------------*/
@@ -343,13 +374,18 @@ fullbootstrap-edit-log:
 	@ $(MAKE) -s revision
 
 fullbootstrap-sans-log:
-	(dt=`date '+%d%b%y'`; \
-           $(RM) -f $(BOOTBINDIR)/bigloo.???????.gz > /dev/null 2>&1; \
-           $(RM) -f $(BOOTBINDIR)/bigloo.????????.gz > /dev/null 2>&1; \
-           $(RM) -f $(BOOTBINDIR)/bigloo.?????????.gz > /dev/null 2>&1; \
-           cp $(BOOTBINDIR)/bigloo$(EXE_SUFFIX) $(BOOTBINDIR)/bigloo.$$dt$(EXE_SUFFIX); \
-           $(GZIP) $(BOOTBINDIR)/bigloo.$$dt$(EXE_SUFFIX))
-	@ ./configure --bootconfig $(CONFIGUREOPTS)
+	./configure --bootconfig $(CONFIGUREOPTS)
+	$(MAKE) fullbootstrap-sans-configure
+	$(MAKE) -C recette -i touchall
+	$(MAKE) -C recette && (cd recette && ./recette$(EXE_SUFFIX))
+	if [ "$(JVMBACKEND)" = "yes" ]; then \
+	  $(MAKE) -C recette jvm && (cd recette && ./recette-jvm$(SCRIPTEXTENSION)); \
+        fi
+	$(MAKE) -C recette clean
+	@ echo "Bigloo full bootstrap done..."
+	@ echo "-------------------------------"
+
+fullbootstrap-sans-configure:
 	if [ "$(GCCUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C gc clean; \
 	  $(MAKE) -C gc boot; \
@@ -357,6 +393,10 @@ fullbootstrap-sans-log:
 	if [ "$(GMPCUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C gmp clean; \
 	  $(MAKE) -C gmp boot; \
+        fi
+	if [ "$(PCRE2CUSTOM)" = "yes" ]; then \
+	  $(MAKE) -C pcre2 clean; \
+	  $(MAKE) -C pcre2 boot; \
         fi
 	if [ "$(PCRECUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C pcre clean; \
@@ -384,44 +424,16 @@ fullbootstrap-sans-log:
 	  $(MAKE) -C bglpkg -i clean; \
 	  $(MAKE) -C bglpkg; \
 	fi
-	$(MAKE) -C recette -i touchall
-	$(MAKE) -C recette && (cd recette && ./recette$(EXE_SUFFIX))
-	if [ "$(JVMBACKEND)" = "yes" ]; then \
-	  $(MAKE) -C recette jvm && (cd recette && ./recette-jvm$(SCRIPTEXTENSION)); \
-        fi
-	$(MAKE) -C recette clean
-	@ echo "Bigloo full bootstrap done..."
-	@ echo "-------------------------------"
 
-#*---------------------------------------------------------------------*/
-#*    c-fullbootstrap ...                                              */
-#*    -------------------------------------------------------------    */
-#*    Bootstrap the compiler using the C backend. This is a            */
-#*    development entry point. It should be used only when testing a   */
-#*    new unstable compiler.                                           */
-#*---------------------------------------------------------------------*/
-c-fullbootstrap:
-	(dt=`date '+%d%b%y'`; \
-           $(RM) -f $(BOOTBINDIR)/bigloo.???????.gz > /dev/null 2>&1; \
-           $(RM) -f $(BOOTBINDIR)/bigloo.????????.gz > /dev/null 2>&1; \
-           $(RM) -f $(BOOTBINDIR)/bigloo.?????????.gz > /dev/null 2>&1; \
-           cp $(BOOTBINDIR)/bigloo$(EXE_SUFFIX) $(BOOTBINDIR)/bigloo.$$dt$(EXE_SUFFIX); \
-           $(GZIP) $(BOOTBINDIR)/bigloo.$$dt$(EXE_SUFFIX))
-	@ ./configure --bootconfig $(CONFIGUREOPTS)
-	@ (cd comptime && $(MAKE) -i touchall; $(MAKE))
-	@ (cd runtime && $(MAKE) -i touchall; $(MAKE) heap libs-c gcs)
-	@ (cd comptime && $(MAKE) -i touchall; $(MAKE))
-	@ (cd comptime && $(MAKE) -i touchall; $(MAKE))
-	@ if [ "$(BOOTCAPI)" = "yes" ]; then \
-            (cd api && $(MAKE) -i clean && $(MAKE) boot-c); \
-          fi
-	@ (cd cigloo && $(MAKE) -i clean; $(MAKE))
-	@ (cd bglpkg && $(MAKE) -i clean; $(MAKE))
-	@ (cd recette && $(MAKE) -i touchall; \
-           $(MAKE) recette && ./recette$(EXE_SUFFIX))
-	@ $(MAKE) -s revision LOGMSG="C Full Bootstrap succeeded at `date '+%d%b%y'`"
-	@ echo "Bigloo C full bootstrap done..."
-	@ echo "-------------------------------"
+# only used for continuous integration, as of 4may2021, fullboostrap
+# is became too long and travis stops the job before it completes!
+cibootstrap:
+	(cd comptime && $(MAKE) -i touchall; $(MAKE))
+	(cd runtime && $(MAKE) -i touchall; $(MAKE) heap libs-c)
+	(cd comptime && $(MAKE) -i touchall; $(MAKE))
+	$(MAKE) -C api fullbootstrap
+	@ echo "Bigloo CI bootstrap done..."
+	@ echo "---------------------------"
 
 #*---------------------------------------------------------------------*/
 #*    newrevision ...                                                  */
@@ -681,7 +693,15 @@ jvm-test:
 
 .PHONY: uninstall
 
-install: install-sans-docs install-docs
+install: install-sans-docs install-doc-$(BOOTMETHOD)
+
+install-doc-bootstrap: install-docs
+
+install-doc-c: install-docs
+
+install-doc-cross:
+
+install-doc-source:
 
 install-sans-docs: install-progs install-apis
 
@@ -703,6 +723,9 @@ install-libs: install-dirs
         fi
 	if [ "$(GMPCUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C gmp install; \
+        fi
+	if [ "$(PCRE2CUSTOM)" = "yes" ]; then \
+	  $(MAKE) -C pcre2 install; \
         fi
 	if [ "$(PCRECUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C pcre install; \
@@ -794,6 +817,9 @@ uninstall: uninstall-bee
 	if [ "$(GMPCUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C gmp uninstall; \
         fi
+	if [ "$(PCRE2CUSTOM)" = "yes" ]; then \
+	  $(MAKE) -C pcre2 uninstall; \
+        fi
 	if [ "$(PCRECUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C pcre uninstall; \
         fi
@@ -848,6 +874,7 @@ clean:
 	$(MAKE) -C gc clean
 	$(MAKE) -C gmp clean
 	$(MAKE) -C pcre clean
+	$(MAKE) -C pcre2 clean
 	$(MAKE) -C libunistring clean
 	(cd comptime && $(MAKE) clean)
 	(cd runtime && $(MAKE) clean)
@@ -874,6 +901,7 @@ cleanall:
 	$(MAKE) -C gc cleanall
 	$(MAKE) -C gmp cleanall
 	$(MAKE) -C pcre cleanall
+	$(MAKE) -C pcre2 cleanall
 	$(MAKE) -C libunistring cleanall
 	(cd comptime && $(MAKE) cleanall)
 	(cd runtime && $(MAKE) cleanall)

@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/comptime/Isa/walk.scm                */
+;*    serrano/prgm/project/bigloo/bigloo/comptime/Isa/walk.scm         */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue Sep  7 05:11:17 2010                          */
-;*    Last change :  Wed May 31 10:45:46 2017 (serrano)                */
-;*    Copyright   :  2010-17 Manuel Serrano                            */
+;*    Last change :  Mon Sep 13 17:05:26 2021 (serrano)                */
+;*    Copyright   :  2010-21 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    Replace isa? calls with specialized inlinable versions           */
 ;*=====================================================================*/
@@ -22,6 +22,7 @@
 	    type_cache
 	    type_misc
 	    type_typeof
+	    type_env
 	    ast_ident
 	    ast_local
 	    ast_env
@@ -104,24 +105,26 @@
    
    (let ((typ (isa-of node)))
       (if typ
+	  ;; use (type-exists? type) to enable library bootstrapping
+	  ;; and the bigloo.heap generation
 	  (with-access::app node (fun args loc)
 	     (cond
 		((or (static-final-class? typ)
 		     (and #f (tclass-final? typ)))
 		 (if (isa? (uncasted-type (car args)) tclass)
-		     (let ((nfun (duplicate::var fun
+		     (let ((nfun (duplicate::ref fun
 				    (variable *isa-object/final*))))
 			(set-car! args
 			   (instantiate::cast
 			      (arg (car args))
 			      (type (get-object-type))))
 			(set! fun nfun))
-		     (let ((nfun (duplicate::var fun
+		     (let ((nfun (duplicate::ref fun
 				    (variable *isa/final*))))
 			(set! fun nfun))))
 		((< (tclass-depth typ) (bigloo-config 'class-display-min-size))
 		 (if (isa? (uncasted-type (car args)) tclass)
-		     (let ((nfun (duplicate::var fun
+		     (let ((nfun (duplicate::ref fun
 				    (variable *isa-object/cdepth*)))
 			   (depth (instantiate::literal
 				     (loc loc)
@@ -132,7 +135,7 @@
 				    (type (get-object-type)))))
 			(set! fun nfun)
 			(set! args (list arg0 (cadr args) depth)))
-		     (let* ((nfun (duplicate::var fun
+		     (let* ((nfun (duplicate::ref fun
 				     (variable *isa/cdepth*)))
 			    (depth (instantiate::literal
 				      (loc loc)

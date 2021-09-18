@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue Jul  2 13:17:04 1996                          */
-;*    Last change :  Sun Dec 22 18:23:24 2019 (serrano)                */
+;*    Last change :  Thu Jul  8 11:31:03 2021 (serrano)                */
 ;*    Copyright   :  1996-2021 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The C production code.                                           */
@@ -625,10 +625,10 @@
 					       (node->cop a *id-kont* inpushexit))
 					  args)))))
 		   ;; adjust the original function call
-		   (set! fun (duplicate::var fun
+		   (set! fun (duplicate::ref fun
 				(variable (duplicate::global v
 					     (name (cadr sa))))))
-		   (set! args (cons (instantiate::var
+		   (set! args (cons (instantiate::ref
 				       (loc loc)
 				       (type *obj*)
 				       (variable decl))
@@ -658,10 +658,10 @@
 						  (node->cop a *id-kont* inpushexit))
 					     args)))))
 		      ;; adjust the orignal function call
-		      (set! fun (duplicate::var fun
+		      (set! fun (duplicate::ref fun
 				   (variable (duplicate::global v
 						(name (cadr sa))))))
-		      (set! args (cons (instantiate::var
+		      (set! args (cons (instantiate::ref
 					  (loc loc)
 					  (type *obj*)
 					  (variable decl))
@@ -726,7 +726,7 @@
    (trace (cgen 3)
 	  "(node->cop node::set-ex-it kont): " (shape node) #\Newline
 	  "  kont: " kont #\Newline)
-   (with-access::set-ex-it node (var body loc)
+   (with-access::set-ex-it node (var body onexit loc)
       (let ((exit (var-variable var)))
 	 (set-variable-name! exit)
 	 (instantiate::csequence
@@ -744,13 +744,7 @@
 		      (exit (instantiate::varc
 			       (loc loc)
 			       (variable exit)))
-		      (jump-value (node->cop
-				     (instantiate::pragma
-					(loc loc)
-					(type *_*)
-					(format "BGL_EXIT_VALUE()")
-					(expr* '()))
-				     kont inpushexit))
+		      (jump-value (node->cop onexit kont inpushexit))
 		      (body (instantiate::csequence
 			       (loc loc)
 			       (cops
@@ -980,7 +974,7 @@
    (instantiate::setq
       (loc (node-loc value))
       (type *unspec*)
-      (var (instantiate::var
+      (var (instantiate::ref
 	      (loc #f)
 	      (type (variable-type variable))
 	      (variable variable)))

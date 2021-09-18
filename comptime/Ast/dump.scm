@@ -1,9 +1,9 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/comptime/Ast/dump.scm                */
+;*    serrano/prgm/project/bigloo/bigloo/comptime/Ast/dump.scm         */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Sat Dec 31 07:26:21 1994                          */
-;*    Last change :  Fri Jun  9 10:13:14 2017 (serrano)                */
+;*    Last change :  Sun Jul 11 09:57:55 2021 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    The ast->sexp translator                                         */
 ;*=====================================================================*/
@@ -378,7 +378,8 @@
    (node->sexp-hook node)
    `(,(shape-typed-node 'set-exit (node-type node))
      ,(node->sexp (set-ex-it-var node))
-     ,(node->sexp (set-ex-it-body node))))
+     :body ,(node->sexp (set-ex-it-body node))
+     :onexit ,(node->sexp (set-ex-it-onexit node))))
 
 ;*---------------------------------------------------------------------*/
 ;*    node->sexp ::jump-ex-it ...                                      */

@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    .../prgm/project/bigloo/api/multimedia/src/Llib/musicbuf.scm     */
+;*    .../bigloo/bigloo/api/multimedia/src/Llib/musicbuf.scm           */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Sat Jun 25 06:55:51 2011                          */
-;*    Last change :  Wed Sep 28 04:43:47 2016 (serrano)                */
-;*    Copyright   :  2011-16 Manuel Serrano                            */
+;*    Last change :  Sat Apr 17 10:11:32 2021 (serrano)                */
+;*    Copyright   :  2011-21 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    A (multimedia) buffer music player.                              */
 ;*=====================================================================*/
@@ -25,9 +25,8 @@
 	       (%decoder (default #f))
 	       (%buffer (default #f))
 	       (%nextbuffer (default #f))
-	       
 	       (%playlist::pair-nil (default '()))
-	       (%aready::bool (default #t))
+	       (%usecnt::int (default 0))
 	       (%amutex::mutex read-only (default (make-mutex)))
 	       (%!pid::int (default -1))
 	       (%acondv::condvar read-only (default (make-condition-variable))))
@@ -250,28 +249,27 @@
    (define (prepare-next-buffer o buffer url::bstring)
       (with-handler
 	 (lambda (e)
-	    ;; ignore that error becase if we cannot open
-	    ;; the URL this will be detected again in the
-	    ;; next open-file that will occur in the main
-	    ;; play-url function
-	    #f))
-      (with-access::musicportbuffer buffer (%head %tail %inlen %inbuf %inbufp)
-	 (with-access::musicbuf o (%amutex %nextbuffer %status)
-	    (synchronize %amutex
-	       (unless %nextbuffer
-		  (let ((ip (open-file url o)))
-		     (when (input-port? ip)
-			(let ((buf (instantiate::musicportbuffer
-				      (url url)
-				      (port ip)
-				      (%inlen %inlen)
-				      (%inbuf %inbuf)
-				      (%inbufp %inbufp)
-				      (%head %head)
-				      (%tail %tail)
-				      (%nexttail %head))))
-			   (set! %nextbuffer buf)
-			   buf))))))))
+	    ;; ignore this error because if the URL cannot be opened
+	    ;; this will be detected again in the next open-file that
+	    ;; will occur in the main play-url function
+	    #f)
+	 (with-access::musicportbuffer buffer (%head %tail %inlen %inbuf %inbufp)
+	    (with-access::musicbuf o (%amutex %nextbuffer %status)
+	       (synchronize %amutex
+		  (unless %nextbuffer
+		     (let ((ip (open-file url o)))
+			(when (input-port? ip)
+			   (let ((buf (instantiate::musicportbuffer
+					 (url url)
+					 (port ip)
+					 (%inlen %inlen)
+					 (%inbuf %inbuf)
+					 (%inbufp %inbufp)
+					 (%head %head)
+					 (%tail %tail)
+					 (%nexttail %head))))
+			      (set! %nextbuffer buf)
+			      buf)))))))))
    
    (define (open-port-buffer o::musicbuf d::musicdecoder url::bstring next::pair-nil)
       (let ((ip (open-file url o)))
@@ -355,18 +353,29 @@
 	 (unwind-protect
 	    (begin
 	       (musicdecoder-reset! d)
-	       (with-access::musicbuf o (%amutex %!pid %buffer %decoder)
+	       (with-access::musicbuf o (%amutex %!pid %buffer %decoder %usecnt)
 		  (synchronize %amutex
 		     (set! %buffer buffer)
 		     (set! %decoder d)
 		     (set! %!pid pid)
+		     (set! %usecnt (+fx 1 %usecnt))
 		     (update-song-status! o n pid (car urls)))
 		  (when notify
 		     (with-access::musicbuf o (%status onevent)
 			(with-access::musicstatus %status (playlistid)
 			   (onevent o 'playlist playlistid)))))
+	       ;; wait for the buffer to be full before playing
+	       (with-access::musicportbuffer buffer (%bmutex %bcondv %head %tail %empty)
+		  (synchronize %bmutex
+		      (unless (and (=fx %head %tail) (not %empty))
+			 (condition-variable-wait! %bcondv %bmutex))))
 	       (musicdecoder-decode d o buffer))
-	    (musicbuffer-close buffer))))
+	    (begin
+	       (musicbuffer-close buffer)
+	       (with-access::musicbuf o (%amutex %acondv %usecnt)
+		  (synchronize %amutex
+		     (set! %usecnt (-fx %usecnt 1))
+		     (condition-variable-broadcast! %acondv)))))))
    
    (define (play-urls urls n)
       (with-access::musicbuf o (%amutex %!pid %decoder %status)
@@ -420,7 +429,7 @@
 			       (obj action)))))))))))
 
    (define (wait-playlist n)
-      (with-access::musicbuf o (%amutex %playlist %aready %!pid)
+      (with-access::musicbuf o (%amutex %playlist %!pid)
 	 (synchronize %amutex
 	    (let ((playlist %playlist))
 	       (when (and (>=fx n 0) (<fx n (length playlist)))
@@ -432,7 +441,6 @@
 		  (let ((playid %!pid))
 		     (musicbuf-wait-ready! o)
 		     (when (=fx %!pid playid)
-			(set! %aready #f)
 			;; play the list of urls
 			(list-tail playlist n))))))))
    
@@ -443,10 +451,9 @@
 	    ;; we got a playlist let's play it
 	    (unwind-protect
 	       (play-urls pl n)
-	       (with-access::musicbuf o (%buffer %decoder %aready %amutex %acondv)
+	       (with-access::musicbuf o (%buffer %decoder %amutex %acondv)
 		  (synchronize %amutex
 		     ;; reset the player state
-		     (set! %aready #t)
 		     (set! %buffer #f)
 		     (set! %decoder #f)
 		     ;;(pcm-reset! o)
@@ -528,14 +535,13 @@
 	 (musicbuffer-abort! %buffer))
       (when (isa? %nextbuffer musicbuffer)
 	 (musicbuffer-abort! %nextbuffer))
-      (with-access::musicbuf o (%aready %acondv %amutex)
-	 (unless %aready
+      (with-access::musicbuf o (%usecnt %acondv %amutex)
+	 (unless (=fx %usecnt 0)
 	    (let loop ()
-	       (unless %aready
+	       (unless (=fx %usecnt 0)
 		  ;; keep waiting
 		  (condition-variable-wait! %acondv %amutex)
-		  (loop))))
-	 (set! %aready #t))))
+		  (loop)))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    musicbuffer-abort! ...                                           */
@@ -548,7 +554,7 @@
 	 (condition-variable-broadcast! %bcondv))))
 
 ;*---------------------------------------------------------------------*/
-;*    musicdecoder-abort! ...                                         */
+;*    musicdecoder-abort! ...                                          */
 ;*---------------------------------------------------------------------*/
 (define (musicdecoder-abort! d::musicdecoder)
    (with-access::musicdecoder d (%!dabort %!dpause %dmutex %dcondv)
@@ -567,7 +573,7 @@
 	    (musicdecoder-pause %decoder)))))
 
 ;*---------------------------------------------------------------------*/
-;*    musicdecoder-pause ...                                          */
+;*    musicdecoder-pause ...                                           */
 ;*---------------------------------------------------------------------*/
 (define (musicdecoder-pause d::musicdecoder)
    (with-access::musicdecoder d (%dmutex %dcondv %!dpause)
@@ -917,19 +923,22 @@
 	 ((string-suffix? ".wav" path) "audio/x-wav")
 	 ((string-suffix? ".swf" path) "application/x-shockwave-flash")
 	 ((string-suffix? ".swfl" path) "application/x-shockwave-flash")
-	 (else "audio/mpeg")))
+	 (else #f)))
    
-   (if (and (string-prefix? "http" path)
-	    (or (string-prefix? "http://" path)
-		(string-prefix? "https://" path)))
-       (let ((i (string-index-right path #\?)))
-	  (if i
-	      (let ((base (substring path 6 i)))
-		 (if (string-index base #\.)
-		     ;; there is something that looks like a suffix in base url
-		     (mime-type base)
-		     ;; there is suffix, try in the arguments
-		     (mime-type-file (substring path (+fx i 1)))))
-	      (mime-type-file path)))
-       (mime-type-file path)))
+   (or (if (and (string-prefix? "http" path)
+		(or (string-prefix? "http://" path)
+		    (string-prefix? "https://" path)))
+	   (let ((i (string-index-right path #\?)))
+	      (if i
+		  (let ((base (substring path 6 i)))
+		     (if (string-index base #\.)
+			 ;; there is something that looks like a suffix in base url
+			 (or (mime-type-file base)
+			     (mime-type-file (substring path (+fx i 1))))
+			 ;; there is suffix, try in the arguments
+			 (mime-type-file (substring path (+fx i 1)))))
+		  (mime-type-file path)))
+	   (mime-type-file path))
+       "audio/mpeg"))
+       
 

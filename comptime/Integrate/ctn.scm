@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/comptime/Integrate/ctn.scm           */
+;*    .../prgm/project/bigloo/bigloo/comptime/Integrate/ctn.scm        */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Wed Mar 15 14:10:09 1995                          */
-;*    Last change :  Thu Nov 17 08:35:44 2016 (serrano)                */
-;*    Copyright   :  1995-2020 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Sun Jul 11 09:42:21 2021 (serrano)                */
+;*    Copyright   :  1995-2021 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The computation of `Cn' and `Ct'.                                */
 ;*       Cn(f,g) === exists k, A(f,g,k)                                */
@@ -27,7 +27,7 @@
 ;*---------------------------------------------------------------------*/
 ;*    Cn&Ct! ...                                                       */
 ;*    -------------------------------------------------------------    */
-;*    This function returns the list of the globalized functions due   */
+;*    This function returns the list of globalized functions due       */
 ;*    to the Cn property.                                              */
 ;*---------------------------------------------------------------------*/
 (define (Cn&Ct! A)
@@ -47,7 +47,6 @@
 		((global? g)
 		 (loop (cdr As) G/cn))
 		((sfun/Iinfo-forceG? gi)
-		 ;; CARE, MS 28Mar2011: fix the trick a integrate_a)
 		 (if (not (sfun/Iinfo-G? gi))
 		     (begin
 			(sfun/Iinfo-G?-set! gi #t)
@@ -60,7 +59,7 @@
 		     (sfun/Iinfo-kont-set! fi (cons g (sfun/Iinfo-kont fi))))
 		 (loop (cdr As) G/cn))
 		((eq? k 'escape)
-		 (error 'Cn&Ct! "SHould not be here" A))
+		 (error "Cn&Ct!" "Should not be here" A))
 		((sfun/Iinfo-U gi)
 		 (sfun/Iinfo-Ct-set! fi (cons g (sfun/Iinfo-Ct fi)))
 		 (if (not (memq g (sfun/Iinfo-kont fi)))

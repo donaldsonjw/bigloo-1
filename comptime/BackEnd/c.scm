@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Mon Aug  4 14:10:06 2003                          */
-;*    Last change :  Wed Dec 11 06:54:13 2019 (serrano)                */
-;*    Copyright   :  2003-19 Manuel Serrano                            */
+;*    Last change :  Sun Jun 20 09:24:33 2021 (serrano)                */
+;*    Copyright   :  2003-21 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    The C back-end                                                   */
 ;*=====================================================================*/
@@ -121,8 +121,15 @@
    (emit-garbage-collector-selection)
 
    ;; if we are in debugging mode, we generate a macro
-   (if (or (>fx *compiler-debug* 0) *c-debug*)
-       (emit-debug-activation))
+   (when (or (>fx *compiler-debug* 0) *c-debug*)
+      (emit-debug-activation))
+
+   ;; unsafe mode?
+   (when *unsafe-library*
+      (emit-unsafe-activation))
+
+   ;; debug traces
+   (emit-trace-activation)
    
    ;; the include (both Bigloo's and user's ones)
    (emit-include)

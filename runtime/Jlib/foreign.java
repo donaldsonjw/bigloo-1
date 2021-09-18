@@ -4824,9 +4824,18 @@ public final class foreign
 	 return bgldynamic.abgldynamic.get().error_handler;
       }
 
+   public static Object BGL_ENV_ERROR_HANDLER_GET(bgldynamic env)
+      {
+	 return env.get().error_handler;
+      }
+
    public static void BGL_ERROR_HANDLER_SET(Object hdl)
       {
 	 bgldynamic.abgldynamic.get().error_handler = hdl;
+      }
+   public static void BGL_ENV_ERROR_HANDLER_SET(bgldynamic env, Object hdl)
+      {
+	 env.get().error_handler = hdl;
       }
 
    public static void BGL_ERROR_HANDLER_PUSH(Object h, Object hdl)
@@ -4973,6 +4982,11 @@ public final class foreign
 	 return bgldynamic.abgldynamic.get().exitd_top;
       }
 
+   public static Object BGL_ENV_EXITD_TOP_AS_OBJ( bgldynamic env)
+      {
+	 return env.get().exitd_top;
+      }
+
    public static boolean BGL_EXITD_BOTTOMP( Object o ) {
       return ((exit)o).prev == null;
    }
@@ -5022,34 +5036,19 @@ public final class foreign
 	 return bint.BZERO;
       }
 
-   public static Object BGL_EXITD_PROTECT0(exit o)
+   public static Object BGL_EXITD_PROTECT(exit o)
       {
-	 return o.protect0;
+	 return o.protect;
       }
 
-   public static void BGL_EXITD_PROTECT0_SET(exit o, Object m)
+   public static void BGL_EXITD_PUSH_PROTECT(exit o, Object p)
       {
-	 o.protect0 = m;
+	 BGL_EXITD_PROTECT_SET(o, MAKE_PAIR(p, BGL_EXITD_PROTECT(o)));
       }
 
-   public static Object BGL_EXITD_PROTECT1(exit o)
+   public static void BGL_EXITD_PROTECT_SET(exit o, Object m)
       {
-	 return o.protect1;
-      }
-
-   public static void BGL_EXITD_PROTECT1_SET(exit o, Object m)
-      {
-	 o.protect1 = m;
-      }
-
-   public static Object BGL_EXITD_PROTECTN(exit o)
-      {
-	 return o.protectn;
-      }
-
-   public static void BGL_EXITD_PROTECTN_SET(exit o, Object m)
-      {
-	 o.protectn = m;
+	 o.protect = m;
       }
 
    public static Object jumpexit(Object excep, Object value)
@@ -5235,6 +5234,13 @@ public final class foreign
       System.exit(1);
    }
 
+   public static Object PUSH_ENV_EXIT( bgldynamic env, exit v, int protect ) {
+      v.userp = protect;
+      v.prev = (exit) env.get().exitd_top;
+      env.get().exitd_top = v;
+      return unspecified.unspecified;
+   }
+      
    public static Object PUSH_EXIT(exit v, int protect) {
 //      print("** PUSH " + v + " " + protect + " abgldynamic=" + bgldynamic.abgldynamic.get() + " thread=" + Thread.currentThread());
       v.userp = protect;
@@ -5249,6 +5255,17 @@ public final class foreign
       try {
 	 bgldynamic.abgldynamic.get().exitd_top =
 	    ((exit) bgldynamic.abgldynamic.get().exitd_top).prev;
+      } catch( Throwable _t ) {
+	 System.err.println( "\n\n\n******************* POP_EXIT: " + _t );
+      }
+      return unspecified.unspecified;
+   }
+
+   public static Object POP_ENV_EXIT( bgldynamic env ) {
+//      print("** POP abgldynamic=" + bgldynamic.abgldynamic.get()  + " thread=" + Thread.currentThread());
+      try {
+	 env.get().exitd_top =
+	    ((exit) env.get().exitd_top).prev;
       } catch( Throwable _t ) {
 	 System.err.println( "\n\n\n******************* POP_EXIT: " + _t );
       }
@@ -5332,6 +5349,21 @@ public final class foreign
 	 return stack_trace.get(depth);
       }
 
+   public static Object init_trace_stacksp()
+      {
+	 return unspecified.unspecified;
+      }
+      
+   public static Object BGL_GET_TRACE_STACKSP()
+      {
+	 return unspecified.unspecified;
+      }
+      
+   public static Object BGL_SET_TRACE_STACKSP(Object sp)
+      {
+	 return unspecified.unspecified;
+      }
+      
    public static Object __EVMEANING_ADDRESS_REF(procedure f)
       {
 	 return f.funcall0();

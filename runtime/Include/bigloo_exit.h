@@ -3,8 +3,8 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Tue Apr 17 07:40:02 2018                          */
-/*    Last change :  Tue Apr 17 07:42:42 2018 (serrano)                */
-/*    Copyright   :  2018 Manuel Serrano                               */
+/*    Last change :  Tue Jun 22 12:47:40 2021 (serrano)                */
+/*    Copyright   :  2018-21 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Bigloo EXITs                                                     */
 /*=====================================================================*/
@@ -78,87 +78,81 @@ extern struct ia64_rv_t ia64_getcontext (ucontext_t *) __asm__ ("getcontext");
 /*---------------------------------------------------------------------*/
 struct exitd {
    void *exit;
+#if( !defined( __ia64__ ) )
    long userp;
+#endif
    obj_t stamp;
    /* protected blocks */
-   union scmobj *protect0;
-   union scmobj *protect1;
-   union scmobj *protectn;
+   union scmobj *protect;
    /* linking */
-   struct bgl_dframe *top_of_frame;
    struct exitd *prev;
 };
 
-#define EXITD_SYSTEM 0
+/* #define EXITD_SYSTEM 0                                              */
 #define EXITD_USER 1
 #define EXITD_CALLCC 2		 
 
-#define PUSH_ENV_EXIT( env, _xit, _ser ) \
-   struct exitd exitd; \
-   exitd.exit  = _xit; \
-   exitd.userp = _ser; \
-   exitd.protect0 = BFALSE; \
-   exitd.protect1 = BFALSE; \
-   exitd.protectn = BNIL; \
-   exitd.top_of_frame = BGL_ENV_GET_TOP_OF_FRAME( env ); \
-   exitd.prev  = BGL_ENV_EXITD_TOP( env ); \
-   exitd.stamp = BGL_ENV_EXITD_STAMP( env ); \
-   BGL_ENV_EXITD_TOP_SET( env, (&exitd) );
-   
-#define PUSH_EXIT( _xit, _ser ) \
-   PUSH_ENV_EXIT( BGL_CURRENT_DYNAMIC_ENV(), _xit, _ser )
+#if( !defined( __ia64__ ) )
+#  define BGL_EXITD_USERP_SET(_exitd,_ser) _exitd.userp = _ser
+#else
+#  define BGL_EXITD_USERP_SET(_exitd,_ser)
+#endif
 
-#define POP_ENV_EXIT( env ) \
-   BGL_ENV_SET_TOP_OF_FRAME( env, BGL_ENV_EXITD_TOP( env )->top_of_frame); \
-   BGL_ENV_EXITD_TOP_SET( env, BGL_ENV_EXITD_TOP( env )->prev ); \
+#define PUSH_ENV_EXIT_CALLCC(env, _xit, _ser) \
+   struct exitd exitd; \
+   exitd.exit = _xit; \
+   BGL_EXITD_USERP_SET(exitd,_ser); \
+   exitd.protect = BNIL; \
+   exitd.prev = BGL_ENV_EXITD_TOP(env); \
+   exitd.stamp = BGL_ENV_EXITD_STAMP(env); \
+   BGL_ENV_EXITD_TOP_SET(env, (&exitd));
+   
+#define PUSH_ENV_EXIT(env, _xit, _ser) \
+   struct exitd exitd; \
+   exitd.exit = _xit; \
+   BGL_EXITD_USERP_SET(exitd,_ser); \
+   exitd.protect = BNIL; \
+   exitd.prev = BGL_ENV_EXITD_TOP(env); \
+   BGL_ENV_EXITD_TOP_SET(env, (&exitd));
+   
+#define PUSH_EXIT(_xit, _ser) \
+   PUSH_ENV_EXIT(BGL_CURRENT_DYNAMIC_ENV(), _xit, _ser)
+
+#define POP_ENV_EXIT(env) \
+   BGL_ENV_EXITD_TOP_SET(env, BGL_ENV_EXITD_TOP(env)->prev)
 
 #define POP_EXIT() \
-   POP_ENV_EXIT( BGL_CURRENT_DYNAMIC_ENV() )
+   POP_ENV_EXIT(BGL_CURRENT_DYNAMIC_ENV())
 
 #define EXITD_TO_EXIT( ptr ) \
    ((struct exitd *)(ptr))->exit
 
-#define EXITD_USERP( ptr ) \
-   (((struct exitd *)(ptr))->userp != EXITD_SYSTEM)
-
-#define EXITD_CALLCCP( ptr ) \
-   (((struct exitd *)(ptr))->userp == EXITD_CALLCC)
+#if( !defined( __ia64__ ) )
+#  define EXITD_CALLCCP(ptr) (((struct exitd *)(ptr))->userp == EXITD_CALLCC)
+#else
+#  define EXITD_CALLCCP(ptr) 0
+#endif
 
 #define EXITD_STAMP( ptr ) \
    (((struct exitd *)(ptr))->stamp)
 
-#define BGL_EXITD_BOTTOMP( extd ) \
-   (((struct exitd *)(extd)) == BGL_ENV_EXITD_BOTTOM( BGL_CURRENT_DYNAMIC_ENV() ))
+#define EXITD_FLAGS( ptr ) \
+   (((struct exitd *)(ptr))->flags)
 
-#define BGL_EXITD_PROTECT0( ptr ) \
-   (((struct exitd *)(ptr))->protect0)
-   
-#define BGL_EXITD_PROTECT1( ptr ) \
-   (((struct exitd *)(ptr))->protect1)
-   
-#define BGL_EXITD_PROTECTN( ptr ) \
-   (((struct exitd *)(ptr))->protectn)
+#define BGL_EXITD_BOTTOMP(extd) \
+   (((struct exitd *)(extd)) == BGL_ENV_EXITD_BOTTOM(BGL_CURRENT_DYNAMIC_ENV()))
 
-#define BGL_EXITD_PROTECT0_SET( extd, p ) \
-   (BGL_EXITD_PROTECT0( extd ) = (p))
-   
-#define BGL_EXITD_PROTECT1_SET( extd, p ) \
-   (BGL_EXITD_PROTECT1( extd ) = (p))
-   
-#define BGL_EXITD_PROTECTN_SET( extd, p ) \
-   (BGL_EXITD_PROTECTN( extd ) = (p))
+#define BGL_EXITD_PROTECT_SET(extd, p) \
+   (BGL_EXITD_PROTECT(extd) = (p))
 
-#define BGL_EXITD_PUSH_PROTECT( extd, p ) \
-   BGL_EXITD_PROTECT0( extd ) == BFALSE ? BGL_EXITD_PROTECT0_SET( extd, p ) : \
-   BGL_EXITD_PROTECT1( extd ) == BFALSE ? BGL_EXITD_PROTECT1_SET( extd, p ) : \
-      BGL_EXITD_PROTECTN_SET( extd, MAKE_STACK_PAIR( p, BGL_EXITD_PROTECTN( extd ) ) )
+#define BGL_EXITD_PROTECT(ptr) \
+   (((struct exitd *)(ptr))->protect)
+
+#define BGL_EXITD_PUSH_PROTECT(extd, p) \
+   BGL_EXITD_PROTECT_SET(extd, MAKE_STACK_PAIR(p, BGL_EXITD_PROTECT(extd)))
    
 #define BGL_EXITD_POP_PROTECT( extd ) \
-   BGL_EXITD_PROTECT1( extd ) == BFALSE ? \
-      BGL_EXITD_PROTECT0_SET( extd, BFALSE ) :	\
-      NULLP( BGL_EXITD_PROTECTN( extd ) ) ? \
-        BGL_EXITD_PROTECT1_SET( extd, BFALSE ) : \
-        BGL_EXITD_PROTECTN_SET( extd, CDR( BGL_EXITD_PROTECTN( extd ) ) )
+   BGL_EXITD_PROTECT_SET(extd, CDR(BGL_EXITD_PROTECT(extd)))
    
 /*---------------------------------------------------------------------*/
 /*    `dynamic-wind' before thunk linking.                             */

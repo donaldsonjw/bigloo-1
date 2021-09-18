@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Jan  6 11:09:14 1995                          */
-;*    Last change :  Tue Feb 26 13:54:27 2019 (serrano)                */
+;*    Last change :  Thu Jul  8 11:25:32 2021 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    The substitution tools module                                    */
 ;*=====================================================================*/
@@ -76,7 +76,7 @@
 		    (loc (node-loc node))
 		    (type (strict-node-type *procedure* (node-type node)))
 		    (variable alpha))
-		 (instantiate::var
+		 (instantiate::ref
 		    (loc (node-loc node))
 		    (type (node-type node))
 		    (variable alpha))))
@@ -125,7 +125,7 @@
 	 (if (and (closure? nfun)
 		  (not (global-optional? (var-variable nfun)))
 		  (not (global-key? (var-variable nfun))))
-	     (known-app-ly->node '() loc (duplicate::var nfun) narg site)
+	     (known-app-ly->node '() loc (duplicate::ref nfun) narg site)
 	     (begin
 		(set! fun nfun)
 		(set! arg narg)
@@ -236,6 +236,7 @@
 ;*---------------------------------------------------------------------*/
 (define-method (do-substitute! node::set-ex-it site)
    (set-ex-it-body-set! node (do-substitute! (set-ex-it-body node) site))
+   (set-ex-it-onexit-set! node (do-substitute! (set-ex-it-onexit node) site))
    node)
 
 ;*---------------------------------------------------------------------*/

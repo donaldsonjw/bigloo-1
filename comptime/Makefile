@@ -3,7 +3,7 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Wed Jan 14 08:29:03 1998                          */
-#*    Last change :  Tue Mar 24 15:47:57 2020 (serrano)                */
+#*    Last change :  Fri Jul  9 07:34:58 2021 (serrano)                */
 #*    Copyright   :  1998-2021 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The Makefile to build the compiler part of Bigloo (bootstrap).   */
@@ -197,7 +197,7 @@ CFA_OBJ		= $(CFA_FILE:%=Cfa/%.o)
 
 #*--- Integrate -------------------------------------------------------*/
 INTEGRATE_FILE	= walk definition iinfo a kk u g ctn cto kaptured \
-                  let_fun loc2glo node free
+                  let_fun loc2glo node free volatile
 
 INTEGRATE_OBJ	= $(INTEGRATE_FILE:%=Integrate/%.o)
 
@@ -332,6 +332,11 @@ ISA_FILE	= walk
 
 ISA_OBJ	        = $(ISA_FILE:%=Isa/%.o)
 
+#*--- defus -----------------------------------------------------------*/
+LIVENESS_FILE	= liveness set types
+
+LIVENESS_OBJ 	= $(LIVENESS_FILE:%=Liveness/%.o)
+
 #*---------------------------------------------------------------------*/
 #*    The object files                                                 */
 #*---------------------------------------------------------------------*/
@@ -347,7 +352,7 @@ O_OBJECTS_NOIJ  = $(ENGINE_OBJ) $(WRITE_OBJ) \
                   $(TOOLS_OBJ) $(BDB_OBJ) $(PROF_OBJ) $(ABOUND_OBJ) \
                   $(JAS_OBJ) $(BACKEND_OBJ) $(SAW_OBJ) $(SAW_C_OBJ) \
                   $(SAW_JVM_OBJ) $(SYNC_OBJ) $(ISA_OBJ) $(RETURN_OBJ) \
-                  $(STACKABLE_OBJ) $(UNCELL_OBJ)
+                  $(STACKABLE_OBJ) $(UNCELL_OBJ) $(LIVENESS_OBJ)
 
 O_OBJECTS_NOINIT=$(O_OBJECTS_NOIJ)
 
@@ -642,15 +647,15 @@ doboot.static: $(O_OBJECTS) $(G_OBJECTS)
 	-$(STRIP) $(BIGLOO_DEST)$(EXE_SUFFIX)
 
 #*---------------------------------------------------------------------*/
-#*    bigboot                                                          */
+#*    hostboot                                                         */
 #*    -------------------------------------------------------------    */
 #*    This is the regular entry point for a standard Bigloo boot       */
 #*    procedure from the Scheme files, using an already (compatible)   */
 #*    installed compiler.                                              */
 #*---------------------------------------------------------------------*/
-.PHONY: bigboot
+.PHONY: hostboot
 
-bigboot: 
+hostboot: 
 	$(MAKE) SCMOBJSUFFIX="%.o" LDBOOTFLAGS="-lib-version $(RELEASE) -libgc-version $(RELEASE) -static-bigloo -ldopt $(CSTRIPFLAGS)"
 	-$(STRIP) $(BIGLOO_DEST)$(EXE_SUFFIX)
 
