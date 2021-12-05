@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue Mar 11 11:28:42 2008                          */
-;*    Last change :  Wed Jul  7 08:58:54 2021 (serrano)                */
+;*    Last change :  Thu Nov  4 18:55:38 2021 (serrano)                */
 ;*    Copyright   :  2008-21 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    Bigloo native api                                                */
@@ -34,6 +34,7 @@
       ($+bx::bignum (::bignum ::bignum) "bgl_bignum_add")
       ($-bx::bignum (::bignum ::bignum) "bgl_bignum_sub")
       ($*bx::bignum (::bignum ::bignum) "bgl_bignum_mul")
+      ($exptbx::bignum (::bignum ::bignum) "bgl_bignum_expt")
       ($quotientbx::bignum (::bignum ::bignum) "bgl_bignum_quotient")
       ($remainderbx::bignum (::bignum ::bignum) "bgl_bignum_remainder")
       ($gcdbx::bignum (::bignum ::bignum) "bgl_bignum_gcd")
@@ -43,6 +44,14 @@
       ($bignum->string::bstring  (::bignum ::int) "bgl_bignum_to_string")
       ($randbx::bignum (::bignum) "bgl_rand_bignum")
       ($seed-rand::void (::long) "bgl_seed_rand")
+
+      ($bitlshbx::bignum (::bignum ::long) "bgl_bignum_lsh")
+      ($bitrshbx::bignum (::bignum ::long) "bgl_bignum_rsh")
+      ($bitorbx::bignum (::bignum ::bignum) "bgl_bignum_or")
+      ($bitxorbx::bignum (::bignum ::bignum) "bgl_bignum_xor")
+      ($bitandbx::bignum (::bignum ::bignum) "bgl_bignum_and")
+      ($bitmaskbx::bignum (::bignum ::long) "bgl_bignum_mask")
+      ($bitnotbx::bignum (::bignum) "bgl_bignum_not")
       
       (macro $zerobx?::bool (::bignum) "BXZERO")
       (macro $positivebx?::bool (::bignum) "BXPOSITIVE")
@@ -155,7 +164,20 @@
 	    "SAFE_MINUS_FX")
 	 (method static *fx-safe::obj (::long ::long)
 	    "SAFE_MUL_FX")
-	 
+	 (method static $bitlshbx::bignum (::bignum ::long)
+	    "BITLSH_BIGNUM")
+	 (method static $bitrshbx::bignum (::bignum ::long)
+	    "BITRSH_BIGNUM")
+	 (method static $bitorbx::bignum (::bignum ::bignum)
+	    "BITOR_BIGNUM")
+	 (method static $bitxorbx::bignum (::bignum ::bignum)
+	    "BITXOR_BIGNUM")
+	 (method static $bitandbx::bignum (::bignum ::bignum)
+	    "BITAND_BIGNUM")
+	 (method static $bitmaskbx::bignum (::bignum ::long)
+	    "BITMASK_BIGNUM")
+	 (method static $bitnotbx::bignum (::bignum)
+	    "BITNOT_BIGNUM")
 	 (method static +elong-safe::obj (::elong ::elong)
 	    "SAFE_PLUS_ELONG")
 	 (method static -elong-safe::obj (::elong ::elong)
@@ -178,27 +200,29 @@
    (cond-expand
       (enable-gmp
        (pragma
-	($fixnum->bignum side-effect-free no-cfa-top nesting (effect) fail-safe)
-	($elong->bignum side-effect-free no-cfa-top nesting (effect) fail-safe)
-	($llong->bignum side-effect-free no-cfa-top nesting (effect) fail-safe)
-	($uint64->bignum side-effect-free no-cfa-top nesting (effect) fail-safe)
-	($oddbx? side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
-	($evenbx? side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
-	($bignum-cmp side-effect-free no-cfa-top nesting (effect) fail-safe)
-	($zerobx? side-effect-free no-cfa-top nesting (effect) fail-safe)
-	($positivebx? side-effect-free no-cfa-top nesting (effect) fail-safe)
-	($negativebx? side-effect-free no-cfa-top nesting (effect) fail-safe)
-	($absbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
-	($negbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
-	($+bx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
-	($-bx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
-	($*bx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
-	($quotientbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
-	($remainderbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
-	($gcdbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
-	($lcmbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
-	($flonum->bignum side-effect-free args-safe (effect) fail-safe)
-	($bignum->flonum side-effect-free no-cfa-top nesting (effect) fail-safe))))
+	  ($fixnum->bignum side-effect-free no-cfa-top nesting (effect) fail-safe)
+	  ($elong->bignum side-effect-free no-cfa-top nesting (effect) fail-safe)
+	  ($llong->bignum side-effect-free no-cfa-top nesting (effect) fail-safe)
+	  ($uint64->bignum side-effect-free no-cfa-top nesting (effect) fail-safe)
+	  ($oddbx? side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
+	  ($evenbx? side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
+	  ($bignum-cmp side-effect-free no-cfa-top nesting (effect) fail-safe)
+	  ($zerobx? side-effect-free no-cfa-top nesting (effect) fail-safe)
+	  ($positivebx? side-effect-free no-cfa-top nesting (effect) fail-safe)
+	  ($negativebx? side-effect-free no-cfa-top nesting (effect) fail-safe)
+	  ($absbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
+	  ($negbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
+	  ($+bx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
+	  ($-bx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
+	  ($*bx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
+	  ($exptbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
+	  ($quotientbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
+	  ($remainderbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
+	  ($gcdbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
+	  ($lcmbx side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
+	  ($flonum->bignum side-effect-free args-safe (effect) fail-safe)
+	  ($bignum->flonum side-effect-free no-cfa-top nesting (effect) fail-safe)
+	  ($bitlshbx side-effect-free args-safe (effect) fail-safe))))
 
    (pragma
       ($bignum? side-effect-free (predicate-of bignum) no-cfa-top nesting fail-safe)
@@ -212,7 +236,3 @@
       (+llong-safe fail-safe)
       (-llong-safe fail-safe)
       (*llong-safe fail-safe)))
-
-
-
-   

@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Sun Aug  7 11:47:46 1994                          */
-;*    Last change :  Sun Jun 13 08:37:25 2021 (serrano)                */
+;*    Last change :  Sun Dec  5 07:00:12 2021 (serrano)                */
 ;*    Copyright   :  1992-2021 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The command line arguments parsing                               */
@@ -624,13 +624,23 @@
        (set! *profile-library* #t)
        (set! *cc-options* (append *cc-options* (list *cflags-prof*))))
       (("-pmem?level" (help "-pmem[level]" "Compile for memory profiling"))
-       ;;(bigloo-compiler-debug-set! 1)
-       ;; (set! *compiler-debug* 1)
        (let ((l (max (string->integer level) 1)))
-	  (set! *compiler-debug-trace* (*fx 5 l))
-	  (set! *jas-peephole* #f)
 	  (set! *bmem-profiling* #t)
-	  (bigloo-profile-set! l)))
+	  (bigloo-profile-set! l)
+	  (cond-expand
+	     ((library libbacktrace)
+	      (let ((fpopt  (bigloo-config 'c-compiler-fp-option)))
+		 (when (and (string? fpopt) (not (string=? fpopt "")))
+		    (set! *cc-options* (cons fpopt *cc-options*))))
+	      (set! *strip* #f)
+	      (case l
+		 ((2)
+		  (set! *user-inlining?* #f))
+		 ((3)
+		  (set! *inlining?* #f))))
+	     (else
+	      (set! *compiler-debug-trace* (*fx 5 l))
+	      (set! *jas-peephole* #f)))))
       (("-psync" (help "Profile synchronize expr (see $exitd-mutex-profile)"))
        (set! *sync-profiling* #t))
       
@@ -642,12 +652,14 @@
        (bigloo-warning-set! 0)
        (set! *load-verbose* #f))
       ;; verbose
-      (("-v" (help "-v[23]" "Be verbose"))
-       (set! *verbose* 1))
+      (("-v" (help "-v[234]" "Be verbose"))
+       (set! *verbose* (max 1 *verbose*)))
       (("-v2")
-       (set! *verbose* 2))
+       (set! *verbose* (max 2 *verbose*)))
       (("-v3")
-       (set! *verbose* 3))
+       (set! *verbose* (max 3 *verbose*)))
+      (("-v4")
+       (set! *verbose* (max 4 *verbose*)))
       (("-hello" (help "Say hello"))
        (set! *hello* #t))
       (("-no-hello" (help "Dont' say hello even in verbose mode"))

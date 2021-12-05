@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Marc Feeley                                       */
 ;*    Creation    :  Tue Mar 11 11:32:17 2008                          */
-;*    Last change :  Wed Sep  8 08:34:34 2021 (serrano)                */
+;*    Last change :  Mon Nov 29 09:37:36 2021 (serrano)                */
 ;*    Copyright   :  2006-21 Marc Feeley                               */
 ;*    -------------------------------------------------------------    */
 ;*    Portable implementation of bignums. This is used only when no    */
@@ -111,6 +111,7 @@
 	  (export $$+bx "bgl_bignum_add")
 	  (export $$-bx "bgl_bignum_sub")
 	  (export $$*bx "bgl_bignum_mul")
+	  (export $$exptbx "bgl_bignum_expt")
 	  (export $$quotientbx "bgl_bignum_quotient")
 	  (export $$remainderbx "bgl_bignum_remainder")
 	  (export $$gcdbx "bgl_bignum_gcd")
@@ -126,7 +127,15 @@
 	  (export $$negativebx? "BXNEGATIVE")
 	  
 	  (export $$bignum->flonum "bgl_bignum_to_flonum")
-	  (export $$flonum->bignum "bgl_flonum_to_bignum"))))
+	  (export $$flonum->bignum "bgl_flonum_to_bignum")
+
+	  (export $$bitlshbx "bgl_bignum_lsh")
+	  (export $$bitrshbx "bgl_bignum_rsh")
+	  (export $$bitmaskbx "bgl_bignum_mask")
+	  (export $$bitorbx "bgl_bignum_or")
+	  (export $$bitxorbx "bgl_bignum_xor")
+	  (export $$bitandbx "bgl_bignum_and")
+	  (export $$bitnotbx "bgl_bignum_not"))))
    
    (cond-expand
       ((not enable-gmp)
@@ -154,6 +163,7 @@
 	  ($$+bx::bignum ::bignum ::bignum)
 	  ($$-bx::bignum ::bignum ::bignum)
 	  ($$*bx::bignum ::bignum ::bignum)
+	  ($$exptbx::bignum ::bignum ::bignum)
 	  ($$quotientbx::bignum ::bignum ::bignum)
 	  ($$remainderbx::bignum ::bignum ::bignum)
 	  ($$gcdbx::bignum ::bignum ::bignum)
@@ -164,7 +174,15 @@
 	  ($$seed-rand ::long)
 	  
 	  ($$flonum->bignum::bignum ::double)
-	  ($$bignum->flonum::double ::bignum)))))
+	  ($$bignum->flonum::double ::bignum)
+
+	  ($$bitlshbx::bignum ::bignum ::long)
+	  ($$bitrshbx::bignum ::bignum ::long)
+	  ($$bitmaskbx::bignum ::bignum ::long)
+	  ($$bitandbx::bignum ::bignum ::bignum)
+	  ($$bitorbx::bignum ::bignum ::bignum)
+	  ($$bitxorbx::bignum ::bignum ::bignum)
+	  ($$bitnotbx::bignum ::bignum)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    $$string->integer-obj ...                                        */
@@ -654,6 +672,15 @@
 	      n))
        ($$fixnum->bignum 1)))
 
+;*---------------------------------------------------------------------*/
+;*    $$exptbx ...                                                     */
+;*---------------------------------------------------------------------*/
+(define ($$exptbx x y)
+   (cond
+      (($$zerobx? y) ($$fixnum->bignum 1))
+      (($$evenbx? y) ($$exptbx ($$*bx x x) ($$quotientbx y ($$fixnum->bignum 2))))
+      (else ($$*bx x ($$exptbx x ($$-bx y ($$fixnum->bignum 1)))))))
+   
 ;*---------------------------------------------------------------------*/
 ;*    Bignum division                                                  */
 ;*---------------------------------------------------------------------*/
@@ -1166,4 +1193,27 @@
 (define ($$bignum->flonum n)
    ($fixnum->flonum ($$bignum->fixnum n)))
 
+;*---------------------------------------------------------------------*/
+;*    bitwise operations                                               */
+;*---------------------------------------------------------------------*/
+(define ($$bitlshbx z n)
+   ($$*bx z ($$exptbx ($$fixnum->bignum 2) ($$fixnum->bignum n))))
+
+(define ($$bitrshbx z n)
+   (bignum-div z ($$exptbx ($$fixnum->bignum 2) ($$fixnum->bignum n))))
+
+(define ($$bitmaskbx x y)
+   (error "bitmaskbx" "not implemented" x))
+
+(define ($$bitorbx x y)
+   (error "bitorbx" "not implemented" x))
+
+(define ($$bitxorbx x y)
+   (error "bitxorbx" "not implemented" x))
+
+(define ($$bitandbx x y)
+   (error "bitandbx" "not implemented" x))
+
+(define ($$bitnotbx x)
+   (error "bitnotbx" "not implemented" x))
 ))
