@@ -1,10 +1,10 @@
 /*=====================================================================*/
-/*    /tmp/BGL/bigloo4.3g/runtime/Include/bigloo_int.h                 */
+/*    .../prgm/project/bigloo/bigloo/runtime/Include/bigloo_int.h      */
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Thu Mar  2 05:40:03 2017                          */
-/*    Last change :  Thu Jan 16 08:59:29 2020 (serrano)                */
-/*    Copyright   :  2017-20 Manuel Serrano                            */
+/*    Last change :  Tue Jul  4 18:22:10 2023 (serrano)                */
+/*    Copyright   :  2017-23 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Bigloo INTEGERs                                                  */
 /*=====================================================================*/
@@ -225,14 +225,14 @@ extern "C" {
 /*    -------------------------------------------------------------    */
 /*    See Hacker's Delight, second edition, page 29.                   */
 /*---------------------------------------------------------------------*/
-#if( !defined( __GNUC__ ) )
-static int __builtin_saddl_overflow( long x, long y, long *res ) {
-#if( BGL_ELONG_BIT_SIZE == 32 )
+#if (!BGL_HAVE_OVERFLOW)
+static int __builtin_saddl_overflow(long x, long y, long *res) {
+#if (BGL_ELONG_BIT_SIZE == 32)
    long z = (~((long)x ^ (long)y)) & 0x80000000;
 #else   
    long z = (~((long)x ^ (long)y)) & 0x8000000000000000;;
 #endif
-   if( z & (~((((long)x ^ (long)z) + ((long)y)) ^ ((long) y))) ) {
+   if (z & (~((((long)x ^ (long)z) + ((long)y)) ^ ((long) y)))) {
       return 1;
    } else {
       *res = (x + y);
@@ -240,13 +240,13 @@ static int __builtin_saddl_overflow( long x, long y, long *res ) {
    }
 }
 
-static int __builtin_ssubl_overflow( long x, long y, long *res ) {
-#if( BGL_ELONG_BIT_SIZE == 32 )
+static int __builtin_ssubl_overflow(long x, long y, long *res) {
+#if (BGL_ELONG_BIT_SIZE == 32)
    long z = ((long)x ^ (long)y) & 0x80000000;
 #else
    long z = ((long)x ^ (long)y) & 0x8000000000000000;
 #endif   
-   if( z & ((((long)x ^ (long)z) - ((long)y)) ^ ((long) y)) ) {
+   if (z & ((((long)x ^ (long)z) - ((long)y)) ^ ((long) y))) {
       return 1;
    } else {
       *res = (x - y);
@@ -254,7 +254,44 @@ static int __builtin_ssubl_overflow( long x, long y, long *res ) {
    }
 }
 #endif
-   
+
+/*---------------------------------------------------------------------*/
+/*    Overflows                                                        */
+/*    -------------------------------------------------------------    */
+/*    This macros have to be used with extreme care and should         */
+/*    probably never be used directly in user code. They should        */
+/*    be used in patterns such as:                                     */
+/*                                                                     */
+/*       ($let ((res::bint 0))                                         */
+/*          (if ($+fx/ov x y res)                                      */
+/*              WHATEVER-WITH-THE-OVERFLOW                             */
+/*              res)))                                                 */
+/*                                                                     */
+/*    This uses the special "$let" construct that introduced           */
+/*    unremovable variables. This enables $+fx/ov to be implemented    */
+/*    as one of the followin C macros that takes the address of the    */
+/*    local variable.                                                  */
+/*---------------------------------------------------------------------*/
+#if BGL_HAVE_OVERFLOW && TAG_INT == 0
+#  define BGL_ADDFX_OV(x, y, res) __builtin_saddl_overflow((long)x, (long)y, (long*)&res)
+#  define BGL_SUBFX_OV(x, y, res) __builtin_ssubl_overflow((long)x, (long)y, (long*)&res)
+#  define BGL_MULFX_OV(x, y, res) __builtin_smull_overflow((long)x, (long)y, (long*)&res)
+#else
+#  define BGL_ADDFX_OV(x, y, res) bgl_saddl_overflow(x, y, &res)
+#  define BGL_SUBFX_OV(x, y, res) bgl_subl_overflow(x, y, &res)
+#  define BGL_MULFX_OV(x, y, res) bgl_mull_overflow(x, y, &res)
+#endif
+
+#if TAG_INT == 0
+#   define BGL_ADDFX_SANS_OV(x, y) ((obj_t)(((long)(x)) + ((long)(y))))
+#   define BGL_SUBFX_SANS_OV(x, y) ((obj_t)(((long)(x)) - ((long)(y))))
+#   define BGL_MULFX_SANS_OV(x, y) ((obj_t)(((long)(x)) * ((long)(y))))
+#else
+#   define BGL_ADDFX_SANS_OV(x, y) (BINT(CINT(x) + CINT(y)))
+#   define BGL_SUBFX_SANS_OV(x, y) (BINT(CINT(x) - CINT(y)))
+#   define BGL_MULFX_SANS_OV(x, y) (BINT(CINT(x) * CINT(y)))
+#endif
+
 /*---------------------------------------------------------------------*/
 /*    C++                                                              */
 /*---------------------------------------------------------------------*/

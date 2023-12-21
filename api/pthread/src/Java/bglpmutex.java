@@ -1,10 +1,10 @@
 /*=====================================================================*/
-/*    .../prgm/project/bigloo/api/pthread/src/Java/bglpmutex.java      */
+/*    .../bigloo/bigloo/api/pthread/src/Java/bglpmutex.java            */
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Sat Mar  5 13:37:30 2005                          */
-/*    Last change :  Wed Dec 19 10:40:02 2012 (serrano)                */
-/*    Copyright   :  2005-12 Manuel Serrano                            */
+/*    Last change :  Wed Dec 20 07:45:38 2023 (serrano)                */
+/*    Copyright   :  2005-23 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Mutex implementation                                             */
 /*=====================================================================*/
@@ -17,23 +17,21 @@ import java.lang.*;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.TimeUnit; 
 
-
 import bigloo.*;
 
 /*---------------------------------------------------------------------*/
 /*    bglpmutex                                                        */
 /*---------------------------------------------------------------------*/
 public class bglpmutex extends bigloo.mutex {
-   private static Object mutexes = bigloo.foreign.BNIL;
-
-   private final ReentrantLock mutex;
+   public static Object mutexes = bigloo.foreign.BNIL;
+   public final ReentrantLock mutex;
     
    protected static void setup() {
       bigloo.mutex.amutex = new bglpmutex( bigloo.foreign.BUNSPEC );
    }
 
-   protected Object thread = null;
-   protected String state = "not-abandoned";
+   public Object thread = null;
+   public String state = "unlocked";
    
    private Object specific;
 
@@ -58,7 +56,7 @@ public class bglpmutex extends bigloo.mutex {
 	 
          if( m.thread == thread ) {
             m.release_lock();
-            m.state = "abandoned";
+            m.state = "unlocked";
          }
          w = foreign.CDR( (pair)w );
       }
@@ -70,8 +68,8 @@ public class bglpmutex extends bigloo.mutex {
            if( mutex.tryLock(ms, TimeUnit.MILLISECONDS) ) {
                /* mark mutex owned */
                thread = bglpthread.current_thread();
-               System.out.printf("thread %s is locking%n", thread); 
-               state = null;
+               //System.out.printf("thread %s is locking%n", thread); 
+               state = "locked";
                res = 0;
            }
            
@@ -89,7 +87,7 @@ public class bglpmutex extends bigloo.mutex {
            mutex.lock();
            /* mark mutex owned */
            thread = bglpthread.current_thread();
-           state = null;
+           state = "locked";
            res = 0;
        } catch( Exception e ) {
            foreign.fail( "mutex-lock!", 
@@ -108,7 +106,7 @@ public class bglpmutex extends bigloo.mutex {
        mutex.unlock();
        /* mark mutex no longer owned */
        thread = null;
-       state = "not-abandoned";
+       state = "unlocked";
        return 0;
    }
 

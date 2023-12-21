@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Sun Aug  7 11:47:46 1994                          */
-;*    Last change :  Sun Dec  5 07:00:12 2021 (serrano)                */
-;*    Copyright   :  1992-2021 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Thu Feb 23 08:27:15 2023 (serrano)                */
+;*    Copyright   :  1992-2023 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The command line arguments parsing                               */
 ;*=====================================================================*/
@@ -43,7 +43,6 @@
 ;*---------------------------------------------------------------------*/
 (define *extended-done?* #f)
 (define *libraries* '())
-(define *trace-level* 0)
 (define *user-load-path* (list "." (bigloo-config 'library-directory)))
 (define *force-saw* #unspecified)
 (define *error-localization-opt* #unspecified)
@@ -124,9 +123,11 @@
       ;; we start the trace if the level is > 0
       (when (>fx *trace-level* 0)
 	 (let ((passes (trace get-pass-names)))
-	    (if (memq *pass* passes)
-		(start-trace *trace-level* *pass*)
-		(warning "parse-args" "No trace for this pass -- " *pass*))
+	    (cond
+	       ((memq *pass* passes)
+		(start-trace *trace-level* *pass*))
+	       ((not (eq? *pass* 'ld))
+		(warning "parse-args" "No trace for this pass -- " *pass*)))
 	    (for-each (lambda (pass)
 			 (if (not (memq pass passes))
 			     (warning "parse-args"
@@ -146,6 +147,7 @@
 	  (register-srfi! 'bigloo-jvm))
 	 ((c native)
 	  (set! *target-language* (if *saw* 'c-saw 'c))
+	  (when *saw* (register-srfi! 'bigloo-saw))
 	  (register-srfi! 'bigloo-c)))
       ;; and we are done for the arguments parsing
       pres))
@@ -163,13 +165,15 @@
 			  (print "   - " (car var))
 			  (print "     " (cdr var)))
 		       (print "   - " (car var) ": " (cdr var))))
-		(cons `("TMPDIR" . ,(format "temporary directory (default \"~a\")"
-					   (os-tmp)))
-		      '(("BIGLOOLIB" . "libraries' directory")
-			("BIGLOOHEAP" . "the initial heap size in megabytes (4 MB by default)")
-			("BIGLOOSTACKDEPTH" . "the error stack depth printing")
-			("BIGLOOLIVEPROCESS" . "the maximum number of Bigloo live processes")
-			("BIGLOOTRACE" . "list of active traces"))))
+	 (cons `("TMPDIR" . ,(format "temporary directory (default \"~a\")"
+				(os-tmp)))
+	    '(("BIGLOOLIB" . "libraries' directory")
+	      ("BIGLOOHEAP" . "the initial heap size in megabytes (4 MB by default)")
+	      ("BIGLOOMAXHEAP" . "the maxium heap size in megabytes (unlimited by default)")
+	      ("BIGLOOSTACKDEPTH" . "the error stack depth printing")
+	      ("BIGLOOLIVEPROCESS" . "the maximum number of Bigloo live processes")
+	      ("BIGLOOTRACE" . "list of active traces")
+	      ("BIGLOOGCTHREADS" . "Max GC threads number"))))
       (newline)
       (print "Runtime Command file:")
       (print "   - ~/.bigloorc"))
@@ -197,11 +201,11 @@
 	     (newline)
 	     (print (bigloo-license))))
       (compiler-exit 0))
-
+   
    (bigloo-warning-set! 2)
    
    (pass-args-parse (lib-dir jvm default) default args
-       
+      
 ;*--- misc ------------------------------------------------------------*/
       (section "Misc")
       ;; preliminary test
@@ -250,7 +254,7 @@
       ;; with modules
       (("-with" ?module (help "Import addition module"))
        (set! *early-with-modules* (cons (string->symbol module)
-					*early-with-modules*)))
+				     *early-with-modules*)))
       ;; multiple-include
       (("-multiple-inclusion" (help "Enables multiple inclusions of the Bigloo includes"))
        (set! *include-multiple* #t))
@@ -303,8 +307,8 @@
        (set! *user-load-path* (cons dir *user-load-path*)))
       ;; library path
       (pass lib-dir
-       (("-lib-dir" ?dir (help "Set lib-path to DIR"))
-	(process-lib-dir-parameter dir)))
+	 (("-lib-dir" ?dir (help "Set lib-path to DIR"))
+	  (process-lib-dir-parameter dir)))
       (("-L" ?name (help "Set additional library path"))
        (set! *lib-dir* (cons name *lib-dir*))
        (bigloo-library-path-set! (cons name (bigloo-library-path))))
@@ -324,10 +328,10 @@
        (set! *target-language* 'native))
       ;; jvm code generation
       (pass jvm
-	    (("-jvm" (help "Compile module to JVM .class files"))
-	     (set! *heap-name* *heap-jvm-name*)
-	     (set! *obj-suffix* '("class"))
-	     (set! *target-language* 'jvm)))
+	 (("-jvm" (help "Compile module to JVM .class files"))
+	  (set! *heap-name* *heap-jvm-name*)
+	  (set! *obj-suffix* '("class"))
+	  (set! *target-language* 'jvm)))
       ;; Bigloo Assembly code generation
       (("-saw" (help "Cut the AST in the saw-mill"))
        (set! *force-saw* #t))
@@ -343,14 +347,14 @@
       (("-snow" (help "Compiles a snow source code"))
        (set! *src-suffix* (cons "snow" *src-suffix*))
        (set! the-remaining-args (cons* "-extend" "snow"
-				       "-library" "snow"
-				       the-remaining-args)))
+				   "-library" "snow"
+				   the-remaining-args)))
       ;; scmpkg
       ((("-scmpkg" "-spi") (help "Compiles a ScmPkg source code"))
        (set! *src-suffix* (cons "spi" *src-suffix*))
        (set! the-remaining-args (cons* "-extend" "pkgcomp"
-				       "-library" "pkgcomp"
-				       the-remaining-args)))
+				   "-library" "pkgcomp"
+				   the-remaining-args)))
       ;; nil
       (("-nil" (help "Evaluate '() as #f in `if' expression"))
        (set! *nil* #f))
@@ -381,6 +385,12 @@
        (set! *arithmetic-overflow* #f))
       (("-fno-arithmetic-overflow" (help "Enable arithmetic overflow checks"))
        (set! *arithmetic-overflow* #t))
+      (("-fno-arithmetic-overflow" (help "Enable arithmetic overflow checks"))
+       (set! *arithmetic-overflow* #t))
+      (("-farithmetic-new-overflow" (help "Enable the new overflow arithmetic checks"))
+       (set! *arithmetic-new-overflow* #t))
+      (("-fno-arithmetic-new-overflow" (help "Disable the new overflow arithmetic checks"))
+       (set! *arithmetic-new-overflow* #f))
       ;; case sensitivity
       (("-fcase-sensitive" (help "Case sensitive reader (default)"))
        (bigloo-case-sensitivity-set! 'sensitive))
@@ -394,16 +404,21 @@
       ;; benchmarking
       (("-Obench" (help "Benchmarking mode"))
        (do-parse-args `("-O6" "-unsafe"
-			     "-copt" ,*cflags-optim*
-			     "-static-all-bigloo"))) 
+			  "-copt" ,*cflags-optim*
+			  "-static-all-bigloo"))) 
       ;; optimization
       (("-O?opt" (help "-O[0..6]" "Optimization modes"))
        (parse-optim-args opt))
-      ;; fix arithmetic tagging
+      ;; fixnum arithmetic tagging
       (("-ftagged-fxop" (help "Enable tagged fix-ops optimization"))
        (set! *optim-tagged-fxop?* #t))
       (("-fno-tagged-fxop" (help "Disable tagged fix-ops optimization"))
        (set! *optim-tagged-fxop?* #f))
+      ;; flonum arithmetic specialization
+      (("-ffloop" (help "Enable flonum specialization"))
+       (set! *optim-specialize-flonum?* #t))
+      (("-fno-flop" (help "Disable flonum specialization"))
+       (set! *optim-specialize-flonum?* #f))
       ;; cfa optimizations
       (("-fcfa" (help "Enable CFA"))
        (set! *optim-cfa?* #t))
@@ -488,6 +503,10 @@
       (("-fno-O-macro" (help "Disable Optimization macro"))
        (set! *optim-O-macro?* #f))
       ;; tailc
+      (("-ftailc" (help "Enable tail-call optimization"))
+       (set! *c-tail-call* #t))
+      (("-fno-tailc" (help "Disable tail-call optimization"))
+       (set! *c-tail-call* #f))
       (("-fglobal-tailc" (help "Enable global tail-call optimization"))
        (set! *global-tail-call?* #t))
       (("-fno-global-tailc" (help "Disable global tail-call optimization"))
@@ -526,17 +545,21 @@
        (set! *saw-bbv?* #t))
       (("-fno-saw-bbv" (help "Disable saw basic-blocks versionning"))
        (set! *saw-bbv?* #f))
+      (("-fsaw-bbv-fun" ?name (help "Apply bbv on this very function"))
+       (set! *saw-bbv?* #t)
+       (set! *saw-bbv-functions*
+	  (cons (string->symbol name) *saw-bbv-functions*)))
       (("-fsaw-regalloc-msize" ?size (help "Set the register allocation body size limit"))
        (set! *saw-register-allocation?* #t)
        (set! *saw-register-allocation-max-size* (string->integer size)))
       (("-fsaw-regalloc-fun" ?name (help "Allocate registers on this very function"))
        (set! *saw-register-allocation?* #t)
        (set! *saw-register-allocation-functions*
-	     (cons (string->symbol name) *saw-register-allocation-functions*)))
+	  (cons (string->symbol name) *saw-register-allocation-functions*)))
       (("-fno-saw-regalloc-fun" ?name (help "Don't allocate registers on this very function"))
        (set! *saw-register-allocation?* #t)
        (set! *saw-no-register-allocation-functions*
-	     (cons (string->symbol name) *saw-no-register-allocation-functions*)))
+	  (cons (string->symbol name) *saw-no-register-allocation-functions*)))
       (("-fsaw-regalloc-onexpr" (help "Allocate registers on expressions"))
        (set! *saw-register-allocation-onexpression?* #t))
       (("-fno-saw-regalloc-onexpr" (help "Don't allocate registers on expressions"))
@@ -755,22 +778,22 @@
        (set! *static-bigloo?* #t))
       ;; static all Bigloo library
       (("-static-all-bigloo"
-	(help "Link with static version of all bigloo libraries"))
+	  (help "Link with static version of all bigloo libraries"))
        (register-srfi! 'static-all-bigloo)
        (register-srfi! 'static-bigloo)
        (set! *static-bigloo?* #t)
        (set! *static-all-bigloo?* #t))
       ;; double libraries inclusions
       (("-ld-libs1"
-	(help "Add once user libraries when linking"))
+	  (help "Add once user libraries when linking"))
        (set! *double-ld-libs?* #f))
       (("-ld-libs2"
-	(help "Add twice user libraries when linking (default)"))
+	  (help "Add twice user libraries when linking (default)"))
        (set! *double-ld-libs?* #t))
       ;; C library linking
       (("-l?library" (help "Link with host library"))
        (set! *bigloo-user-lib* (cons (string-append "-l" library)
-				     *bigloo-user-lib*)))
+				  *bigloo-user-lib*)))
       ;; main generation
       (("-auto-link-main" (help "Enable main generation when needed for linking"))
        (set! *auto-link-main* #t))
@@ -828,7 +851,7 @@
        (set! *optim-jvm-inlining* (+fx 1 *optim-jvm-inlining*)))
       (("-fjvm-constr-inlining" (help "Enable JVM back-end inlining for constructors"))
        (set! *optim-jvm-constructor-inlining*
-	     (+fx 1 *optim-jvm-constructor-inlining*)))
+	  (+fx 1 *optim-jvm-constructor-inlining*)))
       (("-fno-jvm-inlining" (help "Disable JVM back-end inlining"))
        (set! *optim-jvm-inlining* 0))
       (("-fno-jvm-constr-inlining" (help "Disable JVM back-end inlining for constructors"))
@@ -861,7 +884,9 @@
 ;*--- trace options ---------------------------------------------------*/
       (section "Traces")
       ;; traces
-      (("-t" (help "-t[2|3|4]" "Generate a trace file (*)"))
+      (("-t" (help "-t[1|2|3|4]" "Generate a trace file (*)"))
+       (set! *trace-level* 1))
+      (("-t1")
        (set! *trace-level* 1))
       (("-t2")
        (set! *trace-level* 2))
@@ -916,6 +941,8 @@
        (set! *pass* 'narrow))
       (("-tlift" (help "Stop after the type lifting stage"))
        (set! *pass* 'tlift))
+      (("-reduce0" (help "Stop after the early reduction stage"))
+       (set! *pass* 'reduce0))
       (("-dataflow" (help "Stop after the type dataflow stage"))
        (set! *pass* 'dataflow))
       (("-dataflow+" (help "Stop after the second type dataflow stage"))
@@ -928,6 +955,8 @@
        (set! *pass* 'user))
       (("-fxop" (help "Stop after the fx-ops optimization"))
        (set! *pass* 'fxop))
+      (("-flop" (help "Stop after the flonum specialization optimization"))
+       (set! *pass* 'flop))
       (("-coerce" (help "Stop after the type coercing stage"))
        (set! *pass* 'coerce))
       (("-effect" (help "Stop after the effect stage"))
@@ -1050,19 +1079,19 @@
 	   (set! *target-language* '.net))
 	  (else
 	   (error "parse-args" "Unknown target" lang))))
-
+      
 ;*--- end bigloo arg parsing  --------------------------------------*/
       ((("--")
         (help "--" "end bigloo arg parsing"))
        (set! *rest-args*  (append *rest-args* (reverse! the-remaining-args)))
        (set! the-remaining-args '()))
-
+      
       
 ;*--- Unknown arguments -----------------------------------------------*/
       (("-?dummy")
        (set! *rest-args* (cons (string-append "-" dummy) *rest-args*)))
       
-     
+      
 ;*--- The source file -------------------------------------------------*/
       (else
        (let ((suf (suffix else)))
@@ -1272,7 +1301,9 @@
       ;; (set! *optim-narrow?* #t)
       ;; (set! *optim-return?* #t)
       (set! *optim-cfa-free-var-tracking?* #t)
-      (set! *optim-cfa-unbox-closure-args* #t))
+      (set! *optim-cfa-unbox-closure-args* #t)
+      (unless (eq? *c-tail-call* #f)
+	 (set! *c-tail-call* #t)))
       
    (define (-O3!)
       (-O2!)
@@ -1288,6 +1319,7 @@
    (set! *optim-O-macro?* #t)
    (set! *optim-dataflow?* #t)
    (set! *optim-symbol-case* #t)
+   (set! *optim-specialize-flonum?* #t)
    (if (> (string-length string) 0)
        (case (string-ref string 0)
 	  ((#\0)

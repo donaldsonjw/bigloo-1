@@ -22,13 +22,19 @@ sudo apt -qq update
 sudo apt install -y dh-make libssl1.1 libssl-dev libsqlite3-0 libsqlite3-dev
 sudo apt install -y libasound2-dev libflac-dev libmpg123-dev libavahi-core-dev
 sudo apt install -y libavahi-common-dev libavahi-client-dev libpulse-dev
-sudo apt install -y libgmp-dev automake libtool
+sudo apt install -y libgmp-dev automake libtool fakeroot
 ```
 
 Optionally, it might be usefull to install alsa utils
 
 ```
 sudo apt install alsa-utils
+```
+
+For Ubuntu
+
+```shell
+sudo apt install build-essential
 ```
 
 
@@ -65,7 +71,7 @@ example:
 4. Building Debian packages with Qemu
 -------------------------------------
 
-The file bigloo/arch/raspian/README.cross.md contains informations on
+The file bigloo/arch/raspberry/README.cross.md contains informations on
 how to prepare an ARM image suitable for the Qemu emulator and how to
 spawn the emulator so that it can be used to build a Debian package
 on the emulated architecture.

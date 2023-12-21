@@ -1,9 +1,9 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/bmacs/bee/bee-config.el              */
+;*    serrano/prgm/project/bigloo/bigloo/bmacs/bee/bee-config.el       */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Mon May 25 07:28:09 1998                          */
-;*    Last change :  Fri Mar  3 11:16:56 2017 (serrano)                */
+;*    Last change :  Wed Nov 15 08:11:41 2023 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    The Bee configuration file.                                      */
 ;*    -------------------------------------------------------------    */
@@ -192,7 +192,7 @@ Setting that variable must change the buffer local UDE-MAKEMAKE"
    (cons "\\[assert[^\] \n]*\\]\\|\(assert[^\) \n]*\)"
 	 'ude-font-lock-face-2)
    (list (concat "\(\\(error\\|error/location\\|error/source\\|warning\\|pragma\\|trace\\|"
-		 "with-trace\\|trace-item\\|"
+		 "with-trace\\|trace-item\\|when-trace\\|"
 		 "bind-exit\\|call/cc\\|try\\|unwind-protect\\|cond-expand\\|"
 		 "with-exception-handler\\|with-handler\\|with-alarm\\|current-exception-handler\\|raise\\|"
 		 "profile\\|profile/gc\\|delay\\|force\\)"
@@ -240,7 +240,9 @@ Setting that variable must change the buffer local UDE-MAKEMAKE"
 	 'ude-font-lock-face-7)
    (list "\(\\(<[^> \t\n]+>\\)[ \n\t)]"
 	 1
-	 'ude-font-lock-face-12))
+	 'ude-font-lock-face-12)
+   (cons "#;"
+	 'font-lock-comment-face))
   "The Bee font-lock specification."
   :group 'bee)
 

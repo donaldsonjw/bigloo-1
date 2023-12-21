@@ -3,7 +3,7 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Fri Mar 31 18:06:36 1995                          */
-/*    Last change :  Thu Oct  7 08:15:32 2021 (serrano)                */
+/*    Last change :  Fri Dec  8 09:48:32 2023 (serrano)                */
 /*    -------------------------------------------------------------    */
 /*    Execution traces (mainly for error reporting)                    */
 /*=====================================================================*/
@@ -12,7 +12,7 @@
 /*---------------------------------------------------------------------*/
 /*    Stack registrations                                              */
 /*---------------------------------------------------------------------*/
-static void default_init_trace();
+static void default_init_trace(obj_t);
 static obj_t default_get_trace_stack(int);
 static void default_walk_trace_stack(obj_t);
 static obj_t no_get_trace_stack(int);
@@ -92,7 +92,7 @@ default_walk_trace_stack(obj_t proc) {
 _loop: {
       if (SYMBOLP( runner->name) || STRINGP(runner->name)) {
 	 obj_t p = MAKE_PAIR(runner->name, MAKE_PAIR(runner->location, BNIL));
-	 if (PROCEDURE_ENTRY(proc)(proc, p) != BFALSE) {
+	 if (BGL_PROCEDURE_CALL1(proc, p) != BFALSE) {
 	    goto _loop;
 	 }
       }

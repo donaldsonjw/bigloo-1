@@ -1,10 +1,10 @@
 #!/bin/sh
 #*=====================================================================*/
-#*    serrano/prgm/project/bigloo/autoconf/openssl-getter              */
+#*    serrano/prgm/project/bigloo/bigloo/autoconf/openssl-getter       */
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Wed Aug  9 13:27:23 1995                          */
-#*    Last change :  Mon Dec  5 18:39:52 2016 (serrano)                */
+#*    Last change :  Mon Jul 10 13:59:29 2023 (serrano)                */
 #*    -------------------------------------------------------------    */
 #*    Check for the host openssl library.                              */
 #*=====================================================================*/
@@ -73,7 +73,7 @@ int main( int argc, char *argv[] ) {
     DH *dh;
     const BIGNUM *key;
     DH_get0_key( dh, &key, 0 );
-    return SSL_CTX_get_ssl_method( ctx );
+    return (SSL_CTX_get_ssl_method( ctx ) == NULL) ? 1 : 0;
 }
 EOF
 
@@ -88,6 +88,6 @@ fi
 
 \rm -f $file.*
 \rm -f $aout
-\rm -f $aout*
+\rm -rf $aout*
 
 exit 0

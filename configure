@@ -4,9 +4,9 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Tue Jan 25 16:05:10 1994                          */
-#*    Last change :  Sun Dec  5 07:05:53 2021 (serrano)                */
+#*    Last change :  Sat Dec  9 13:36:07 2023 (serrano)                */
 #*    Last change :  Thu May 14 09:43:33 2020 (serrano)                */
-#*    Copyright   :  1994-2021 Manuel Serrano, see LICENSE file        */
+#*    Copyright   :  1994-2023 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The Bigloo configuration file                                    */
 #*    -------------------------------------------------------------    */
@@ -17,8 +17,8 @@
 #*---------------------------------------------------------------------*/
 #*    Bigloo revision number                                           */
 #*---------------------------------------------------------------------*/
-release=4.5a
-buildrelease=4.4c
+release=4.5b
+buildrelease=4.5a-1
 version=
 bigloourl=http://www-sop.inria.fr/indes/fp/Bigloo
 biglooftp=ftp://ftp-sop.inria.fr/indes/fp/Bigloo
@@ -44,13 +44,17 @@ rpath=
 
 #*--- api -------------------------------------------------------------*/
 importantapis="pthread fthread srfi18 ssl sqlite web multimedia mail calendar pkgcomp pkglib text srfi1 crypto openpgp csv upnp libuv libbacktrace"
-apis="$importantapis gstreamer phidget alsa pulseaudio wav flac mpg123 phone avahi srfi27 packrat"
+apis="$importantapis gstreamer phidget alsa pulseaudio wav flac mpg123 phone avahi srfi27 packrat mqtt"
 
 #*--- bee configuration -----------------------------------------------*/
 bee=partial # "partial" or "full"
 
 #*--- build directory -------------------------------------------------*/
 buildtmp=$TMPDIR
+
+if [ "$buildtmp " = " " ]; then
+  buildtmp=$tmpdir
+fi  
 
 #*--- C back-end user configure ---------------------------------------*/
 nativebackend=yes # set to "no" not to install the native (C) back-end
@@ -83,6 +87,7 @@ cpicflags="demanded" # Possible values for cpicflags are:
              #  - blank (uninitalized) for automatic configuration of the
 #    position independent code compiler option
 cnanflags=-DBGL_NAN_TAGGING=0
+creservedflags=-DBGL_RESERVED_TAGGING=0
 as=          # left blank for autoconfiguration
 ar=          # left blank for autoconfiguration
 ranlib=      # left blank for autoconfiguration
@@ -104,6 +109,7 @@ belong_prealloc_min=-10
 belong_prealloc_max=100
 
 bglnantagging=0
+bglreservedtagging=0
 bglsmi=0
 
 #*--- Java back-end user configuration --------------------------------*/
@@ -171,7 +177,8 @@ unistringsrc=$UNISTRINGSRC
 unistringconfigureopt=
 
 if [ "$unistringsrc " = " " ]; then
-  unistringversion=0.9.10
+  #unistringversion=0.9.10
+  unistringversion=1.1
   unistringsrc=libunistring/libunistring-$unistringversion.tgz
 fi  
 
@@ -182,8 +189,13 @@ customlibbacktrace=
 libbacktracesrc=$LIBBACKTRACESRC
 libbacktraceconfigureopt=--enable-shared
 
+#* if [ "$libbacktracesrc " = " " ]; then                              */
+#*   libbacktraceversion=d0f5e95                                       */
+#*   libbacktracesrc=libbacktrace/libbacktrace-$libbacktraceversion.tgz */
+#* fi                                                                  */
+
 if [ "$libbacktracesrc " = " " ]; then
-  libbacktraceversion=d0f5e95
+  libbacktraceversion=14818b7
   libbacktracesrc=libbacktrace/libbacktrace-$libbacktraceversion.tgz
 fi  
 
@@ -198,6 +210,7 @@ pthreadtimedlock=1
 pthreadcancel=
 pthreadtermsig=15
 pthreadlocalstorage=
+pthreadsetname=
 
 #*--- openssl library (left blank for autoconfiguration) --------------*/
 openssllibs=
@@ -265,7 +278,10 @@ libuvconfigureopt=
 #* libuvversion=v1.19.1                                                */
 #* libuvversion=v1.19.2                                                */
 #* libuvversion=v1.20.3                                                */
-libuvversion=v1.40.0
+#* libuvversion=v1.40.0                                                */
+#* libuvversion=v1.43.0                                                */
+#* libuvversion=v1.44.2                                                */
+libuvversion=v1.47.0
 
 #*--- phidget (left blank for autoconfiguration) ----------------------*/
 phidget=
@@ -290,7 +306,9 @@ customgc=yes
 #gccustom=gc-7.5.0-27may2016
 #gccustom=gc-7.6.2
 #gccustom=gc-8.0.2
-gccustom=gc-8.0.4
+#gccustom=gc-8.0.4
+#gccustom=gc-8.2.2
+gccustom=gc-8.2.4
 gcversion=
 gcbump=0
 cgcflags=
@@ -341,7 +359,7 @@ sharedlibrarygcfthclosed='-l$(GCLIB)_fth-$(RELEASE)'
 
 #*--- should the compiler be dynamically linked?  ---------------------*/
 # the legal value for that variable is `yes' or `no'
-sharedcompiler=no
+sharedcompiler=
 sharedbde=no
 
 #*--- forced OS -------------------------------------------------------*/
@@ -441,7 +459,7 @@ pcre2src=$PCRE2SRC
 pcre2configureopt=
 
 if [ "$pcre2src " = " " ]; then
-  pcre2version=10.36
+  pcre2version=10.42
   pcre2src=pcre2/pcre2-$pcre2version.tgz
 fi  
 
@@ -520,6 +538,8 @@ while : ; do
       bee="full";
       havebdb=1;
       pthreadlocalstorage=;
+      pthreadsetname=;
+      bglreservedtagging=0;
       action="all";;
 
     --bootdir=*)
@@ -766,6 +786,9 @@ while : ; do
     --no-ldpreload)
       ldpreload="no";;
 
+    --no-c-musttail)
+      musttail="0";;
+
     --force-hostos=*)
       hostos="`echo $1 | sed 's/^[^=]*=//'`";;
 
@@ -929,6 +952,9 @@ while : ; do
 
     --nan-tagging)
       bglnantagging=1;;
+      
+    --reserved-tagging)
+      bglreservedtagging=1;;
       
     --smi)
       bglsmi=1;;
@@ -1188,6 +1214,7 @@ while : ; do
       echo "   --cfpflags=fp_flags" >&2;
       echo "   --cwarningflags=warning_flags" >&2;
       echo "   --cpicflags=pic_flags" >&2;
+      echo "   --no-c-musttail (disable C tail call annotations)" >&2;
       echo "   --ldlibs=ld_libs" >&2;
       echo "   --ldcomplibs=ld_compiler_libs" >&2;
       echo "   --ldflags=ld_flags" >&2;
@@ -1226,7 +1253,7 @@ while : ; do
       echo "   --no-pcre2 (disable prce2 library support)" >&2;
       echo "   --no-ldpreload" >&2;
       echo "   --sharedbde=yes|no [default no] (link Bde tools against shared libraries)" >&2;
-      echo "   --sharedcompiler=yes|no [default no] (link Bigloo against shared libraries)" >&2;
+      echo "   --sharedcompiler=yes|no [os dependent] (link Bigloo against shared libraries)" >&2;
       echo "" >&2;
       echo "JVM configuration:"  >&2;
       echo "   --java=file" >&2;
@@ -1672,6 +1699,9 @@ case $hostos in
     gcspecial=-DIGNORE_DYNAMIC_LOADING;
     # Use the multithreaded libbigloogc to close the other shared libraries
     sharedlibrarygcclosed=$sharedlibrarygcmtclosed
+
+    # disable libbacktrace as it crashes on some Android versions
+    libbacktrace=no
   
     ;;
 esac
@@ -1710,7 +1740,8 @@ if [ $bootmethod = "source" ]; then
   fi
 
   if [ $? != 0 ]; then
-    echo "command failed \"wget $ftp/bigloo-$buildrelease -o $TMPDIR/bigloo-$buildrelease.tar.gz\""
+    echo "command failed \"wget $biglooftp/bigloo-$buildrelease -o download/bigloo-$buildrelease.tar.gz\""
+    rm -f download/bigloo-$buildrelease.tar.gz
     wget --help > /dev/null 2> /dev/null
     
     if [ $? != 0 ]; then
@@ -1925,17 +1956,26 @@ case $hostos in
       sharedsuffix="dylib"
       ldlibs="$ldlibs \$(GCCLOSELIB) -lc"
       ldsonameopt="-install_name ~a"
-      sharedcompiler=yes
+      if [ "$sharedcompiler " = " " ]; then
+        sharedcompiler=yes
+      fi
       sharedbde=yes
       ldflags="$ldflags -dynamiclib -single_module -Wl,-read_only_relocs,suppress"
-      customgmp=yes
+      #customgmp=yes
       customgmpmakefile=Makefile.macosx
-      customunistring=yes
-      customlibbacktrace=yes
+      #customunistring=yes
       customlibuv=yes
       customgc=yes
       custompcre=no
-      custompcre2=yes
+      #custompcre2=yes
+      libbacktrace=no
+      #customlibbacktrace=yes
+
+      # as of 20jul2023, gmp is not working on M2 architecture, disable it
+      # for now
+      if [ "$gmpversion " = " " ]; then
+	gmpversion="no"
+      fi
       
       if [ "$mode " != "benchmark " -a "$pthreadlibs " != "no " ]; then
         if [ "$threadsupport " = "no " ]; then
@@ -1952,6 +1992,9 @@ case $hostos in
         exit 1
       fi
 
+      # as of November 2023, MacOSX 23.0.0, clang version 14.0.0, musttail
+      # crashes so we disable it by default
+      musttail="0"
       tuning="MacOS X"
     fi
 
@@ -1997,6 +2040,13 @@ case $hostos in
     ;;
 esac
 $echo >> $configurelog
+
+#*---------------------------------------------------------------------*/
+#*    default configuration                                            */
+#*---------------------------------------------------------------------*/
+if [ "$sharedcompiler " = " " ]; then
+  sharedcompiler=no
+fi
 
 #*---------------------------------------------------------------------*/
 #*    C tool chain                                                     */
@@ -2169,6 +2219,11 @@ else
     pthreadlocalstorage=`$autoconf pthreadlocalstorage --lib="$pthreadlibs"` || exit 1;
   fi
 
+  # pthread setname
+  if [ "$pthreadlibs" != "no" -a "$pthreadsetname " = " " ]; then
+    pthreadsetname=`$autoconf pthreadsetname --lib="$pthreadlibs"` || exit 1;
+  fi
+
   # pthread kill
   if [ "$pthreadlibs" != "no" ]; then
     pthreadkill=`$autoconf pthreadkill --lib="$pthreadlibs"` || exit 1;
@@ -2235,6 +2290,15 @@ if [ "$action" != "bigloo_config_el" ]; then
     fi
   fi
 
+  if [ "$bglreservedtagging " != "0 " ]; then
+    if [ "$alignment" = "3" ]; then 
+      creservedflags="-DBGL_RESERVED_TAGGING=1";
+    else
+      $echo "*** ERROR: Reserved-tagging requires 64bit platforms"
+      exit 1
+    fi
+  fi
+     
   $echo "+ GC configuration ($customgc)..." >> $configurelog
   
   cgcflags="`$autoconf gcflags` $cgcflags" || exit 1
@@ -2356,7 +2420,7 @@ if [ "$gmpversion " != "no " ]; then
         gmplib=-lgmp
       fi
   
-      gmpversion=`$autoconf gmp --lib=$gmplib` || exit 1
+      gmpversion=`$autoconf gmp --lib="$gmplib"` || exit 1
     fi
   fi  
   
@@ -2978,6 +3042,14 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
   # C compiler nan and infinity
   ccdiv0=`$autoconf ccdiv0` || exit 1
 
+  # strict std C required
+  stdc=`$autoconf stdc` || exit 1
+
+  # if the C compiler complains about non prototyped calls, use strict stdc mode
+  if [ "$stdc " = "0 " ]; then
+    stdc=`$autoconf stdcwarning` || exit 1
+  fi
+  
   # C compiler sse and math operations on x86-32 architecture
   if [ "$alignment " = "2 " ]; then
     cflags="$cflags `$autoconf ccssex86`"
@@ -3051,6 +3123,11 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
 
   # The number of window register
   window=`$autoconf winreg` || exit 1
+
+  # Does the C compiler supports musttail annotation?
+  if [ "$musttail " = " " ]; then
+    musttail=`$autoconf musttail`
+  fi
 
   # Does the system have sigpipe?
   sigpipe=`$autoconf sigpipe` || exit 1
@@ -3162,6 +3239,14 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
     haveresolvzxfr=0;
   fi
 
+  # clock_getres availability
+  clocklib=`$autoconf clocklib` || exit 1
+
+  if [ "$clocklib " != " " ]; then
+    extralibs="-l$clocklib $extralibs"
+    ldcomplibs="-l$clocklib $ldcomplibs"
+  fi
+  
   # Where to find the socket api
   socketlibs=`$autoconf socket --lib="$socketlibs"` || exit 1
   socklen=`$autoconf socklen --lib="$socketlibs"` || exit 1
@@ -3272,6 +3357,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
 
   # Is sigaction available
   getrlimit=`$autoconf getrlimit` || exit 1
+  getrlimitfull=`$autoconf getrlimitfull` || exit 1
 
   # Is setenv available for us
   setenv=`$autoconf setenv` || exit 1
@@ -3496,8 +3582,19 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
     fi
 
     java_version=`$javac -version 2>&1 | head -n 1` || exit 1
-
-    if $echo "$java_version" | grep "14." > /dev/null
+    if $echo "$java_version" | grep "20." > /dev/null
+      then java_version=20
+    elif $echo "$java_version" | grep "19." > /dev/null
+      then java_version=19
+    elif $echo "$java_version" | grep "18." > /dev/null
+      then java_version=18     
+    elif $echo "$java_version" | grep "17." > /dev/null
+      then java_version=17
+    elif $echo "$java_version" | grep "16." > /dev/null
+      then java_version=16
+    elif $echo "$java_version" | grep "15." > /dev/null
+      then java_version=15
+    elif $echo "$java_version" | grep "14." > /dev/null
       then java_version=14
     elif $echo "$java_version" | grep "13." > /dev/null
       then java_version=13
@@ -3580,6 +3677,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
         | sed -e "s|@CONFIGURE@|Automatically generated file (don't edit), `date`|" \
               -e "s|@BGL_RELEASE@|BGL_$rel|" \
               -e "s|@BGL_RELEASE_NUMBER@|$release|" \
+              -e "s|@BGL_RELEASE_VERSION@|$version|" \
               -e "s|@BGL_RELEASE_BRANCH@|$branch|" \
               -e "s|@BGL_HOMEURL@|$bigloourl|" \
               -e "s|@BGL_SPECIFIC_VERSION@|$specific|" \
@@ -3594,10 +3692,12 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
               -e "s|@INT_BIT_SIZE@|$intsize|" \
               -e "s|@ELONG_BIT_SIZE@|$elongsize|" \
               -e "s|@BGL_NAN_TAGGING@|$bglnantagging|" \
+              -e "s|@BGL_RESERVED_TAGGING@|$bglreservedtagging|" \
               -e "s|@BGL_SMI@|$bglsmi|" \
               -e "s|@BGL_ISOC99@|$isoc99|" \
               -e "s|@BGL_HAS_ERRNOH@|$errnoh|" \
               -e "s|@BGL_CCDIV0@|$ccdiv0|" \
+              -e "s|@BGL_STRICT_STDC@|$stdc|" \
               -e "s|@HAVE_STDINT@|$stdint|" \
               -e "s|@HAVE_STDLIBINT@|$stdlibint|" \
               -e "s|@HAVE_UNISTDINT@|$unistdint|" \
@@ -3610,6 +3710,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
               -e "s|@LONGJMP@|$longjmp|" \
               -e "s|@HAVE_BCOPY@|$havebcopy|" \
               -e "s|@NB_WINDOW_REGISTER@|$window|" \
+              -e "s|@HAVE_MUSTTAIL@|$musttail|" \
               -e "s|@HAVE_SIGPIPE@|$sigpipe|" \
               -e "s|@BGL_HAVE_GETGROUPS@|$getgroups|" \
               -e "s|@BGL_HAVE_IOCTL@|$ioctl|" \
@@ -3655,6 +3756,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
               -e "s|@HAVE_SIGACTION@|$sigaction|" \
               -e "s|@HAVE_SIGINFO@|$siginfo|" \
               -e "s|@HAVE_GETRLIMIT@|$getrlimit|" \
+              -e "s|@HAVE_GETRLIMIT_FULL@|$getrlimitfull|" \
               -e "s|@BGL_HAVE_SELECT@|$select|" \
               -e "s|@BGL_HAVE_FCNTL@|$fcntl|" \
               -e "s|@HAVE_TERMIO@|$termio|" \
@@ -3760,6 +3862,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
               -e "s|@BGL_HAVE_LOCKF@|$lockf|" \
               -e "s|@BGL_PTHREAD_TERM_SIG@|$pthreadtermsig|" \
               -e "s|@BGL_HAS_THREAD_LOCALSTORAGE@|$pthreadhastls|" \
+              -e "s|@BGL_HAS_THREAD_SETNAME@|$pthreadsetname|" \
               -e "s|@BGL_THREAD_DECL@|$pthreaddecl|" \
               -e "s|@BGL_HEAP_DEBUG_COPT@||" \
               -e "s|@BGL_HAVE_MIXER@|$havemixer|" \
@@ -3837,6 +3940,16 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
     mv $p $bootdir/bin/$p
     chmod u+rx $bootdir/bin/$p
   done
+
+  # www/www.json
+  date=`date +"%B %Y"`
+  if [ -f www/www.json.in ]; then
+    cat www/www.json.in |
+      sed -e "s|@BGL_RELEASE_NUMBER@|$release|" \
+          -e "s|@BGL_RELEASE_VERSION@|$version|" \
+          -e "s|@BGL_RELEASE_BRANCH@|$branch|" \
+          -e "s|@BGL_RELEASE_DATE@|$date|" > www/www.json
+  fi
 fi
 
 #*---------------------------------------------------------------------*/
@@ -3865,10 +3978,10 @@ if [ $action = "all" -o $action = "bigloo_static" ]; then
   max=`expr $belong_prealloc_max - 1`;
   i=$belong_prealloc_min
   while expr $i "<" $max > /dev/null; do
-    $echo "  { header: MAKE_HEADER( ELONG_TYPE, ELONG_SIZE ), val: $i }, " >> $bigloo_static_h
+    $echo "  { .header = MAKE_HEADER( ELONG_TYPE, ELONG_SIZE ), .val = $i }, " >> $bigloo_static_h
     i=`expr $i + 1`;
   done
-  $echo "  { header: MAKE_HEADER( ELONG_TYPE, ELONG_SIZE ), val: $i } }; " >> $bigloo_static_h
+  $echo "  { .header = MAKE_HEADER( ELONG_TYPE, ELONG_SIZE ), .val = $i } }; " >> $bigloo_static_h
   $echo "" >> $bigloo_static_h
   $echo "#if( !defined( BGL_CNST_SHIFT_INT32 ) )" >> $bigloo_static_h
   $echo "#define BGL_INT32_PREALLOC_MIN $belong_prealloc_min" >> $bigloo_static_h
@@ -3877,20 +3990,20 @@ if [ $action = "all" -o $action = "bigloo_static" ]; then
   max=`expr $belong_prealloc_max - 1`;
   i=$belong_prealloc_min
   while expr $i "<" $max > /dev/null; do
-    $echo "  { header: MAKE_HEADER( INT32_TYPE, BGL_INT32_SIZE ), val: $i }, " >> $bigloo_static_h
+    $echo "  { .header = MAKE_HEADER( INT32_TYPE, BGL_INT32_SIZE ), .val = $i }, " >> $bigloo_static_h
     i=`expr $i + 1`;
   done
-  $echo "  { header: MAKE_HEADER( INT32_TYPE, BGL_INT32_SIZE ), val: $i } }; " >> $bigloo_static_h
+  $echo "  { .header = MAKE_HEADER( INT32_TYPE, BGL_INT32_SIZE ), .val = $i } }; " >> $bigloo_static_h
   $echo "" >> $bigloo_static_h
   $echo "#define BGL_UINT32_PREALLOC_MAX $belong_prealloc_max" >> $bigloo_static_h
   $echo "static struct bgl_uint32 buint32_allocated[] = { " >> $bigloo_static_h
   max=`expr $belong_prealloc_max - 1`;
   i=0
   while expr $i "<" $max > /dev/null; do
-    $echo "  { header: MAKE_HEADER( UINT32_TYPE, BGL_UINT32_SIZE ), val: $i }, " >> $bigloo_static_h
+    $echo "  { .header = MAKE_HEADER( UINT32_TYPE, BGL_UINT32_SIZE ), .val = $i }, " >> $bigloo_static_h
     i=`expr $i + 1`;
   done
-  $echo "  { header: MAKE_HEADER( UINT32_TYPE, BGL_UINT32_SIZE ), val: $i } }; " >> $bigloo_static_h
+  $echo "  { .header = MAKE_HEADER( UINT32_TYPE, BGL_UINT32_SIZE ), .val = $i } }; " >> $bigloo_static_h
   $echo "#endif" >> $bigloo_static_h
 fi
 
@@ -4220,16 +4333,6 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
   fi
   $echo >> $makefile_cfg
 
-  # The LIBBACKTRACE library
-  if [ "$customlibbacktrace " = "yes " ]; then
-    $echo "LIBBACKTRACECUSTOM=yes" >> $makefile_cfg
-    $echo "LIBBACKTRACECUSTOMVERSION=$libbacktraceversion" >> $makefile_cfg
-  else
-    $echo "LIBBACKTRACECUSTOM=no" >> $makefile_cfg
-    $echo "LIBBACKTRACECUSTOMVERSION=$libbacktraceversion" >> $makefile_cfg
-  fi
-  $echo >> $makefile_cfg
-
   # additional bigloo compiler link flags (some architecture such as AIX
   # require a special to link huge executable
   $echo "EXTRA_LD_OPT=$lflags $lcustomflags $rflags" >> $makefile_cfg
@@ -4347,11 +4450,11 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
   
   if [ "$libbacktracelibs " != "no " ]; then
     if [ "$customlibbacktrace " = "yes " ]; then
-      ldcompshared="-llibbacktrace $ldcompshared" >> $makefile_cfg
+      ldcompshared="-lbacktrace $ldcompshared" >> $makefile_cfg
       ldcompstatic="$libbacktracebuildpath/libbacktrace.a $ldcompstatic" >> $makefile_cfg
     else
-      ldcompshared="-llibbacktrace $ldcompshared" >> $makefile_cfg
-      ldcompstatic="-llibbacktrace $ldcompstatic" >> $makefile_cfg
+      ldcompshared="-lbacktrace $ldcompshared" >> $makefile_cfg
+      ldcompstatic="-lbacktrace $ldcompstatic" >> $makefile_cfg
     fi
   fi
   
@@ -4759,8 +4862,10 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
     if [ "$customlibbacktrace " = "yes " ]; then
       $echo "LIBBACKTRACECUSTOM=yes" >> $makefile_cfg
       $echo "LIBBACKTRACECUSTOMVERSION=$libbacktraceversion" >> $makefile_cfg
+      $echo "LIBBACKTRACEBOOTINCDIR=$bootdir/libbacktrace/libbacktrace-$libbacktraceversion" >> $makefile_cfg
     else
       $echo "LIBBACKTRACECUSTOM=no" >> $makefile_cfg
+      $echo "LIBBACKTRACEBOOTINCDIR=." >> $makefile_cfg
     fi
 
     # Patch the code of the LIBBACKTRACE init file
@@ -4784,6 +4889,7 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
     $echo "LIBBACKTRACECUSTOM=no" >> $makefile_cfg
     $echo "LIBBACKTRACELIBS=" >> $makefile_cfg
     $echo "LIBBACKTRACECFLAGS=" >> $makefile_cfg
+    $echo "LIBBACKTRACEBOOTINCDIR=." >> $makefile_cfg
   fi
 
   # PHIDGET
@@ -5062,6 +5168,7 @@ for file in makedeb.sh makedebremote.sh; do
   cat $deb.in \
      | sed -e "s|#!/bin/sh||" \
            -e "s|@VERSION@|$release|" \
+           -e "s|@MINOR@|$version|" \
            -e "s|@APIS@|$apis|" \
      >> $deb  
   chmod a+rx $deb
@@ -5163,6 +5270,11 @@ else
     $echo "  support for thread local storage ..... yes" >> $configurelog
   else
     $echo "  support for thread local storage ..... no" >> $configurelog
+  fi
+  if [ "$pthreadsetname " = "1 " ]; then
+    $echo "  support for thread setname ........... yes" >> $configurelog
+  else
+    $echo "  support for thread setname ........... no" >> $configurelog
   fi
 fi
 if [ "$openssllibs" = "no" ]; then
@@ -5325,11 +5437,16 @@ if [ "$summary" = "yes" ]; then
   $echo
   $echo "Implementation details:"
   $echo "  tuning...................... $mode $tuning"
-  $echo "  cc.......................... $cc"
+  $echo "  cc.......................... $cc ($coflags)"
   if [ $bglnantagging != "0" ]; then
     $echo "  nan tagging................. $bglnantagging"
   else
     $echo "  nan tagging................. no"
+  fi
+  if [ $bglreservedtagging != "0" ]; then
+    $echo "  reserved tagging............ $bglreservedtagging"
+  else
+    $echo "  reserved tagging............ no"
   fi
   if [ $customgc = "yes" ];then
      $echo "  gc.......................... custom ($gclib-$release, v$gcversion)"

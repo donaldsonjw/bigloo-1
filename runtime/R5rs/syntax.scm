@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/runtime/R5rs/syntax.scm              */
+;*    serrano/prgm/project/bigloo/bigloo/runtime/R5rs/syntax.scm       */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue Jul  9 17:24:01 2002                          */
-;*    Last change :  Sun Nov 18 14:00:36 2012 (serrano)                */
-;*    Copyright   :  2002-12 Dorai Sitaram, Manuel Serrano             */
+;*    Last change :  Tue Jan  3 15:57:15 2023 (serrano)                */
+;*    Copyright   :  2002-23 Dorai Sitaram, Manuel Serrano             */
 ;*    -------------------------------------------------------------    */
 ;*    The implementation of R5Rs macros.                               */
 ;*    -------------------------------------------------------------    */
@@ -41,7 +41,10 @@
 	    __evenv
 	    __macro)
 
-   (import  __r4_output_6_10_3 __r4_numbers_6_5 __r4_ports_6_10_1 __r4_numbers_6_5_flonum_dtoa)
+   (import  __r4_output_6_10_3
+	    __r4_numbers_6_5
+	    __r4_ports_6_10_1
+	    __r4_numbers_6_5_flonum_dtoa)
 
    (export  (install-syntax-expander ::symbol ::procedure)
 	    (syntax-rules->expander ::symbol ::pair-nil ::pair-nil)
@@ -65,7 +68,7 @@
 ;*    get-syntax-expander ...                                          */
 ;*---------------------------------------------------------------------*/
 (define (get-syntax-expander f)
-   (let* ((id (hygiene-value f))
+   (let* ((id (hygiene-value* f))
 	  (c (synchronize syntax-mutex (assq id syntaxes))))
       (when (pair? c)
 	 (cdr c))))
@@ -469,6 +472,20 @@
       (substring-at? s hygiene-prefix 0)))
    
 ;*---------------------------------------------------------------------*/
+;*    hygiene-value* ...                                                */
+;*---------------------------------------------------------------------*/
+(define (hygiene-value* x)
+   ;; remove all hygiene mark prefixes. This is only required for
+   ;; obtaining the id used when looking up syntax-rules macros.
+   (if (not (symbol? x))
+       x
+       (let ((s (symbol->string x)))
+	  (let loop ((s s))
+             (if (substring-at? s hygiene-prefix 0)
+                 (loop (substring s hygiene-prefix-len (string-length s)))
+                 (string->symbol s))))))
+
+;*---------------------------------------------------------------------*/
 ;*    hygiene-value ...                                                */
 ;*---------------------------------------------------------------------*/
 (define (hygiene-value x)
@@ -519,16 +536,6 @@
 	      (nenv (append (map cons (flatten vars) (flatten nvars)) env)))
 	  `(lambda ,nvars
 	      ,@(hygienize* body nenv))))
-      ((let ?bindings . ?body)
-       (let* ((nvars (genvars (map car bindings)))
-	      (nenv (append (map (lambda (b v)
-				    (cons (car b) v))
-				 bindings nvars)
-			    env)))
-	  `(let ,(map (lambda (b v)
-			 (list v (hygienize (cadr b) env)))
-		      bindings nvars)
-	      ,@(hygienize* body nenv))))
       ((let (and ?loop (? symbol?)) ?bindings . ?body)
        (let* ((nloop (genvars loop))
 	      (nvars (genvars (map car bindings)))
@@ -541,6 +548,16 @@
 				(list v (hygienize (cadr b) env)))
 			     bindings nvars)
 		,@(hygienize* body nenv))))
+      ((let ?bindings . ?body)
+       (let* ((nvars (genvars (map car bindings)))
+	      (nenv (append (map (lambda (b v)
+				    (cons (car b) v))
+				 bindings nvars)
+			    env)))
+	  `(let ,(map (lambda (b v)
+			 (list v (hygienize (cadr b) env)))
+		      bindings nvars)
+	      ,@(hygienize* body nenv))))
       ((let* ?bindings . ?body)
        (let loop ((bindings bindings)
 		  (nbindings '())

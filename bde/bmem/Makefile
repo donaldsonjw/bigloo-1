@@ -1,10 +1,10 @@
 #*=====================================================================*/
-#*    serrano/prgm/project/bigloo/bigloo/bde/bmem-ng/Makefile          */
+#*    serrano/prgm/project/bigloo/bigloo/bde/bmem/Makefile             */
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Sun Apr 20 09:34:24 2003                          */
-#*    Last change :  Sun Dec  5 09:45:06 2021 (serrano)                */
-#*    Copyright   :  2003-21 Manuel Serrano                            */
+#*    Last change :  Thu Jan 12 13:36:55 2023 (serrano)                */
+#*    Copyright   :  2003-23 Manuel Serrano                            */
 #*    -------------------------------------------------------------    */
 #*    The makefile to build bmem                                       */
 #*=====================================================================*/
@@ -33,7 +33,7 @@ POPULATION	= $(SRC:%=bmem/%) $(INCLUDE:%=bmem/%) \
 #*---------------------------------------------------------------------*/
 #*    Compilers & Flags                                                */
 #*---------------------------------------------------------------------*/
-IFLAGS		= -Ilib -I$(BOOTLIBDIR)
+IFLAGS		= -Ilib -I$(BOOTLIBDIR) -I$(LIBBACKTRACEBOOTINCDIR)
 CMEMFLAGS	= -DBMEMDEBUG $(CPICFLAGS) -g
 BMEMFLAGS	= $(BFLAGS) -g -I bmem $(EFLAGS) -I /tmp/include
 
@@ -73,43 +73,47 @@ lib: $(BOOTLIBDIR)/bmem/bmem_s.$(SHAREDSUFFIX) \
 
 $(BOOTLIBDIR)/bmem/bmem_u.$(SHAREDSUFFIX): $(LIBOBJECT) $(BOOTLIBDIR)/bmem
 	$(MAKE) bigloo-shared-lib \
+           LIBSUFFIX=_u LIBSUFFIXTHREAD= \
 	   OBJECTS="$(LIBOBJECT)" \
            FORCELD=true \
            LIBDEST=$(BOOTLIBDIR)/bmem/bmem_u.$(SHAREDSUFFIX) \
 	   LIBPATH=$(BOOTLIBDIR) \
            SONAME=bmem_u.$(SHAREDSUFFIX) \
 	   LDOPTS="$(LDOPTS) $(LDBUILDOPTS) $(LDBMEMOPTS)" \
-           EXTRALIBS="-lbigloo_u-$(RELEASE) -lbacktrace"
+           EXTRALIBS=$(LIBBACKTRACELIBS)
 
 $(BOOTLIBDIR)/bmem/bmem_s.$(SHAREDSUFFIX): $(LIBOBJECT) $(BOOTLIBDIR)/bmem
 	$(MAKE) bigloo-shared-lib \
+           LIBSUFFIX=_s LIBSUFFIXTHREAD= \
 	   OBJECTS="$(LIBOBJECT)" \
            FORCELD=true \
            LIBDEST=$(BOOTLIBDIR)/bmem/bmem_s.$(SHAREDSUFFIX) \
 	   LIBPATH=$(BOOTLIBDIR) \
            SONAME=bmem_s.$(SHAREDSUFFIX) \
 	   LDOPTS="$(LDOPTS) $(LDBUILDOPTS) $(LDBMEMOPTS)" \
-           EXTRALIBS="-lbigloo_s-$(RELEASE) -lbacktrace"
+           EXTRALIBS=$(LIBBACKTRACELIBS)
 
 $(BOOTLIBDIR)/bmem/bmem_u_mt.$(SHAREDSUFFIX): $(LIBOBJECT) $(BOOTLIBDIR)/bmem
 	$(MAKE) bigloo-shared-lib \
+           LIBSUFFIX=_u LIBSUFFIXTHREAD=_mt \
 	   OBJECTS="$(LIBOBJECT)" \
            FORCELD=true \
            LIBDEST=$(BOOTLIBDIR)/bmem/bmem_u_mt.$(SHAREDSUFFIX) \
 	   LIBPATH=$(BOOTLIBDIR) \
            SONAME=bmem_u_mt.$(SHAREDSUFFIX) \
 	   LDOPTS="$(LDOPTS) $(LDBUILDOPTS) $(LDBMEMOPTS)" \
-           EXTRALIBS="-lbigloo_u_mt-$(RELEASE) -lbacktrace"
+           EXTRALIBS=$(LIBBACKTRACELIBS)
 
 $(BOOTLIBDIR)/bmem/bmem_s_mt.$(SHAREDSUFFIX): $(LIBOBJECT) $(BOOTLIBDIR)/bmem
 	$(MAKE) bigloo-shared-lib \
+           LIBSUFFIX=_s LIBSUFFIXTHREAD=_mt \
 	   OBJECTS="$(LIBOBJECT)" \
            FORCELD=true \
            LIBDEST=$(BOOTLIBDIR)/bmem/bmem_s_mt.$(SHAREDSUFFIX) \
 	   LIBPATH=$(BOOTLIBDIR) \
            SONAME=bmem_s_mt.$(SHAREDSUFFIX) \
 	   LDOPTS="$(LDOPTS) $(LDBUILDOPTS) $(LDBMEMOPTS)" \
-           EXTRALIBS="-lbigloo_s_mt-$(RELEASE) -lbacktrace"
+           EXTRALIBS=$(LIBBACKTRACELIBS)
 
 #*--- lib/bmem --------------------------------------------------------*/
 $(BOOTLIBDIR)/bmem:
@@ -126,17 +130,12 @@ pop:
 #*    install & uninstall                                              */
 #*---------------------------------------------------------------------*/
 install:
+	mkdir -p $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem
 	if [ $(BINDIR) != $(BOOTBINDIR) ]; then \
-	  cp $(BOOTBINDIR)/$(BMEM_EXE) $(DESTDIR)$(BINDIR)/$(BMEM_EXE) || exit 1; \
-          chmod $(MODEXE) $(DESTDIR)$(BINDIR)/$(BMEM_EXE); \
 	  cp $(BOOTBINDIR)/$(BMEMRUN_EXE) $(DESTDIR)$(BINDIR)/$(BMEMRUN_EXE) || exit 1; \
           chmod $(MODEXE) $(DESTDIR)$(BINDIR)/$(BMEMRUN_EXE); \
         fi
 	if [ $(DESTDIR)$(LIBDIR)/$(FILDIR) != $(BOOTLIBDIR) ]; then \
-	  if [ ! -d $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem ]; then \
-            mkdir -p $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem && \
-              chmod $(MODDIR) $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem; \
-          fi && \
 	  cp $(BOOTLIBDIR)/bmem/bmem_s.$(SHAREDSUFFIX) \
              $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem_s.$(SHAREDSUFFIX) || exit 1; \
           chmod $(MODEXE) $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem/bmem_s.$(SHAREDSUFFIX); \
@@ -155,7 +154,6 @@ install:
 
 uninstall:
 	- $(RM) -f $(DESTDIR)$(BINDIR)/$(BMEMRUN_EXE)
-	- $(RM) -rf $(DESTDIR)$(LIBDIR)/$(FILDIR)/bmem
 
 #*---------------------------------------------------------------------*/
 #*    Clean                                                            */

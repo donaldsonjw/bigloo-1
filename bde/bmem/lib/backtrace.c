@@ -1,9 +1,9 @@
 /*=====================================================================*/
-/*    .../prgm/project/bigloo/bigloo/bde/bmem-ng/lib/backtrace.c       */
+/*    serrano/prgm/project/bigloo/bigloo/bde/bmem/lib/backtrace.c      */
 /*    -------------------------------------------------------------    */
 /*    Author      :  manuel serrano                                    */
 /*    Creation    :  Wed Oct  6 15:37:29 2021                          */
-/*    Last change :  Sun Dec  5 10:26:53 2021 (serrano)                */
+/*    Last change :  Mon Dec  6 09:18:25 2021 (serrano)                */
 /*    Copyright   :  2021 manuel serrano                               */
 /*    -------------------------------------------------------------    */
 /*    libbacktrace interface                                           */
@@ -57,16 +57,18 @@ backtrace_alloc_cb(void *data, uintptr_t pc, const char *filename, int lineno, c
    if (!function) {
       return 0;
    }
-   
-   if (info->typenum == -1 || info->typenum == NO_TYPE_NUM) {
-      info->typenum = backtrace_frame_type(filename, function);
-   }
 
    if (!info->filename && function && !alloc_is_native(function)) {
       if (strcmp(filename, "lib/wrapper.c")) {
 	 info->filename = (char *)filename;
 	 info->lineno = lineno;
+      } else {
+	 return 0;
       }
+   }
+   
+   if (info->typenum == -1 || info->typenum == NO_TYPE_NUM) {
+      info->typenum = backtrace_frame_type(filename, function);
    }
    
    if (info->typenum != -1 && info->filename) {
@@ -108,7 +110,7 @@ libbacktrace_get_state(obj_t env) {
 /*---------------------------------------------------------------------*/
 #if !BGL_HAVE_BACKTRACE   
 static void
-_backtrace_full(obj_t env, int start, int (*cb)(), void (*ce)(), void *data) {
+backtrace_full(obj_t env, int start, int (*cb)(), void (*ce)(), void *data) {
    struct bgl_dframe *runner = BGL_ENV_GET_TOP_OF_FRAME(env);
 							   
    while (start-- > 0) {
@@ -171,7 +173,7 @@ backtrace_for_each(backtrace_full_callback proc, int start, void *data) {
 #else
       obj_t bt_state = env;
 #endif      
-      _backtrace_full(bt_state, start, proc, cbe, data);
+      backtrace_full(bt_state, start, proc, cbe, data);
    }
 }
 

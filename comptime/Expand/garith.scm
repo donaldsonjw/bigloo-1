@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/comptime/Expand/garith.scm           */
+;*    .../prgm/project/bigloo/bigloo/comptime/Expand/garith.scm        */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Aug 26 09:16:36 1994                          */
-;*    Last change :  Tue Jul 19 08:37:40 2011 (serrano)                */
-;*    Copyright   :  1994-2020 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Thu Nov 10 17:28:57 2022 (serrano)                */
+;*    Copyright   :  1994-2022 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    Les expandeurs arithmetiques (generiques)                        */
 ;*=====================================================================*/
@@ -36,27 +36,64 @@
 ;*    expand-g2 ...                                                    */
 ;*---------------------------------------------------------------------*/
 (define (expand-g2 x e op)
-   
+
    (define (fx id)
-      (if (and *arithmetic-overflow* (memq id '(+ - / *)))
-	  (symbol-append id 'fx-safe)
-	  (symbol-append id 'fx)))
-   
+      (cond
+	 ((and *arithmetic-overflow* *arithmetic-new-overflow* (memq id '(+ - *)))
+	  (symbol-append id 'fx/ov))
+	 ((and *arithmetic-overflow* (memq id '(+ - / *)))
+	  (symbol-append id 'fx-safe))
+	 (else
+	  (symbol-append id 'fx))))
+
    (match-case x
       ((?id (? expand-g-number?) (expand-g-number? y))
        (apply op x))
       ((?id (and ?a (? fixnum?)) (and ?b (? symbol?)))
-       (let ((nx `(if (fixnum? ,b)
+       (let ((nx `(if ($fixnum? ,b)
 		      (,(fx id) ,a ,b)
 		      (,(symbol-append '|2| id) ,a ,b))))
 	  (e nx e)))
       ((?id (and ?a (? symbol?)) (and ?b (? fixnum?)))
-       (let ((nx `(if (fixnum? ,a)
+       (let ((nx `(if ($fixnum? ,a)
 		      (,(fx id) ,a ,b)
 		      (,(symbol-append '|2| id) ,a ,b))))
 	  (e nx e)))
+      ((?id ?a (and ?b (? flonum?)))
+       (let ((nx (if (symbol? a)
+		     `(if ($flonum? ,a)
+			  (,(symbol-append id 'fl) ,a ,b)
+			  (,(symbol-append '|2| id) ,a ,b))
+		     (let ((tmp (gensym 'a)))
+			`(let ((,tmp ,a)) (,id ,tmp ,b))))))
+	  (e nx e)))
+      ((?id (and ?a (? flonum?)) ?b)
+       (let ((nx (if (symbol? b)
+		     `(if ($flonum? ,b)
+			  (,(symbol-append id 'fl) ,a ,b)
+			  (,(symbol-append '|2| id) ,a ,b))
+		     (let ((tmp (gensym 'b)))
+			`(let ((,tmp ,b)) (,id ,a ,tmp))))))
+	  (e nx e)))
+      ((?id (and ?a (? symbol?)) (and ?b (? symbol?)))
+       (let ((nx `(if (and ($fixnum? ,a) ($fixnum? ,b))
+		      (,(fx id) ,a ,b)
+		      ((@ ,(symbol-append '|2| id) __r4_numbers_6_5) ,a ,b))))
+	  (e nx e)))
+      ((?id (and ?a (? symbol?)) ?b)
+       (let* ((tmp (gensym 'b))
+	      (nx `(let ((,tmp ,b)) (,id ,a ,tmp))))
+	  (e nx e)))
+      ((?id ?a (and ?b (? symbol?)))
+       (let* ((tmp (gensym 'a))
+	      (nx `(let ((,tmp ,a)) (,id ,tmp ,b))))
+	  (e nx e)))
+      
       ((?id ?a ?b)
-       (e `(,(symbol-append '|2| id) ,a ,b) e))))
+       (let* ((tmpa (gensym 'a))
+	      (tmpb (gensym 'b))
+	      (nx `(let* ((,tmpa ,a) (,tmpb ,b)) (,id ,tmpa ,tmpb))))
+	  (e nx e)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    expand-g+ ...                                                    */

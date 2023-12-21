@@ -40,10 +40,7 @@ build-c:
           fi
 
 build-jvm:
-	@ if [ "$(JVMBACKEND)" = "yes" ]; then \
-	    echo "[0m[1;31m>>> JVM[0m"; \
-	    (cd src && $(MAKE) jvm); \
-          fi
+	@ echo "OpenPGP .jvm: not supporte"
 
 #*---------------------------------------------------------------------*/
 #*    pop                                                              */
@@ -82,13 +79,9 @@ install: api-install-init
 	@ if [ "$(NATIVEBACKEND)" = "yes" ]; then \
 	    $(MAKE) api-install-c; \
           fi
-	@ if [ "$(JVMBACKEND)" = "yes" ]; then \
-            $(MAKE) api-install-jvm; \
-          fi
 
 uninstall: api-uninstall-init \
-           api-uninstall-c \
-           api-uninstall-jvm
+           api-uninstall-c
 
 #*---------------------------------------------------------------------*/
 #*    distrib                                                          */

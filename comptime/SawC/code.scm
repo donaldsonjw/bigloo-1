@@ -4,6 +4,7 @@
    (import type_type		; type
 	   ast_var		; local/global
 	   ast_node		; atom
+	   ast_env
 	   module_module	; *module*
 	   engine_param		; *stdc* ...
 
@@ -147,8 +148,9 @@
    (display (make-typed-declaration (rtl_reg-type reg) (reg_name reg))) )
 
 (define (reg_name reg) ;()
-   (string-append (if (SawCIreg-var reg) "V" "R")
-		  (integer->string (SawCIreg-index reg)) ))
+   (or (rtl_reg-debugname reg)
+       (string-append (if (SawCIreg-var reg) "V" "R")
+	  (integer->string (SawCIreg-index reg)) )))
 
 (define (declare-regs l) ;()
    (for-each (lambda (r)
@@ -232,8 +234,9 @@
        (gen-expr (rtl_ins-fun reg) (rtl_ins-args reg)) ))
 
 (define (gen-reg/dest reg) ;()
-   (display (if (SawCIreg-var reg) "V" "R"))
-   (display (SawCIreg-index reg)) )
+   (if (rtl_reg-debugname reg)
+       (display (rtl_reg-debugname reg))
+       (display* (if (SawCIreg-var reg) "V" "R") (SawCIreg-index reg))))
 
 ;;
 ;; Special cases of gen-expr
@@ -242,20 +245,24 @@
    (gen-Xfuncall "L_" args #f) )
 
 (define-method (gen-expr fun::rtl_getfield args);
-   (display "((")
+   (display "BGL_SAW_GETFIELD(")
+   (display (type-name (rtl_getfield-objtype fun)))
+   (display ", ")
    (gen-prefix fun)
    (gen-reg (car args))
-   (display ")->")
+   (display ", ")
    (display (rtl_getfield-name fun))
    (display ")") )
 
 (define-method (gen-expr fun::rtl_setfield args);
-   (display "((")
+   (display "BGL_SAW_SETFIELD(")
+   (display (type-name (rtl_setfield-objtype fun)))
+   (display ", ")
    (gen-prefix fun)
    (gen-reg (car args))
-   (display ")->")
+   (display ",")
    (display (rtl_setfield-name fun))
-   (display "=")
+   (display ",")
    (gen-reg (cadr args))
    (display ")") )
 
@@ -271,10 +278,27 @@
 	      (display ")") )
        (gen-Xfuncall "" args #t) ) )
 
+(define (typename o)
+   (cond
+      ((isa? o rtl_reg)
+       (type-name (rtl_reg-type o)))
+      ((isa? o rtl_ins)
+       (if (rtl_ins-dest o)
+	   (typename (rtl_ins-dest o))
+	   "obj_t"))
+      (else
+       "obj_t")))
+       
 (define (gen-Xfuncall type args eoa?);()
+   (when *stdc*
+      (display
+	 (if eoa?
+	     "((obj_t (*)(obj_t, ...))"
+	     (format "((obj_t (*)(~(, )))"
+		(map typename args)))))
    (display* "PROCEDURE_" type "ENTRY(")
    (gen-reg (car args))
-   (display ")(")
+   (display (if *stdc* "))(" ")("))
    (gen-args args)
    (if eoa? (display ", BEOA"))
    (display ")") )
@@ -302,15 +326,15 @@
       (display ") {")
       (for-each (lambda (pat lab)
 		   (if (eq? pat 'else)
-		       (display* "\n\t default: ")
+		       (display "\n\t default: ")
 		       (for-each (lambda (n)
 				    (display "\n\t case ")
 				    (emit-atom-value n)
 				    (display ":") )
-				 pat ))
+			  pat ))
 		   (display* " goto L" (block-label lab) ";") )
-		pats
-		(rtl_switch-labels fun) )
+	 pats
+	 (rtl_switch-labels fun) )
       (display "\n\t}") ))
 
 ;;
@@ -366,7 +390,7 @@
 
 (define (vfun-name f::bstring type::type) ; ()
    (display* "BGL_RTL_" (if (basic-type? type) "T" "") f) )
-   
+
 (define-method (gen-fun-name fun::rtl_valloc) ;()
    (vfun-name "VALLOC" (rtl_valloc-type fun)) )
 

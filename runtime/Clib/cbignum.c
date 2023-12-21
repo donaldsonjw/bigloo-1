@@ -3,8 +3,8 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  JosÃ© Romildo Malaquias                           */
 /*    Creation    :  Fri Nov 10 11:51:17 2006                          */
-/*    Last change :  Fri Nov 26 12:54:11 2021 (serrano)                */
-/*    Copyright   :  2003-21 Manuel Serrano                            */
+/*    Last change :  Wed Mar 15 18:04:19 2023 (serrano)                */
+/*    Copyright   :  2003-23 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    C implementation of bignum                                       */
 /*=====================================================================*/
@@ -50,21 +50,31 @@ bgl_init_bignum() {
 #define POSITIVE(x) (SIZ(x) > 0)
 #define NEGATIVE(x) (SIZ(x) < 0)
 
+#define BIGNUM_ALLOC_SIZE(sz) \
+   (BIGNUM_SIZE + ((sz) * sizeof(mp_limb_t)))
+
 /*---------------------------------------------------------------------*/
 /*    static obj_t                                                     */
 /*    make_bignum ...                                                  */
 /*---------------------------------------------------------------------*/
 static obj_t
 make_bignum(size_t sz) {
-   obj_t o = GC_MALLOC(BIGNUM_SIZE);
+   obj_t o = GC_MALLOC_ATOMIC(BIGNUM_ALLOC_SIZE(sz));
    
    o->bignum.header = MAKE_HEADER(BIGNUM_TYPE, 0);
-   o->bignum.mpz._mp_d = (mp_limb_t *)GC_MALLOC_ATOMIC(sz * sizeof(mp_limb_t));
+   o->bignum.mpz._mp_d = (mp_limb_t *)&(o->bignum.mp_d);
    o->bignum.mpz._mp_alloc = sz;
 
    return BREF(o);
 }
 
+#define MAKE_STACK_BIGNUM(o, sz) \
+   (o = alloca(BIGNUM_ALLOC_SIZE(sz)), \
+      o->bignum.header = MAKE_HEADER(BIGNUM_TYPE, 0), \
+      o->bignum.mpz._mp_d = (mp_limb_t *)&(o->bignum.mp_d), \
+      o->bignum.mpz._mp_alloc = sz, \
+    BREF(o))
+   
 /*---------------------------------------------------------------------*/
 /*    static void                                                      */
 /*    bignum_set_size ...                                              */
@@ -233,7 +243,7 @@ bgl_bignum_to_long(obj_t x) {
 BGL_RUNTIME_DEF BGL_LONGLONG_T
 bgl_bignum_to_llong(obj_t x) {
 #if (BGL_ELONG_BIT_SIZE > 32)
-   return (BGL_LONGLONG_T)mpz_get_ui(&(BIGNUM(x).mpz));
+   return (BGL_LONGLONG_T)mpz_get_si(&(BIGNUM(x).mpz));
 #else
    const int size = sizeof(BGL_LONGLONG_T);
    const int numb = 8 * size - 0;
@@ -253,7 +263,7 @@ bgl_bignum_to_llong(obj_t x) {
 BGL_RUNTIME_DEF int64_t
 bgl_bignum_to_int64(obj_t x) {
 #if (BGL_ELONG_BIT_SIZE > 32)
-   return (int64_t)mpz_get_ui(&(BIGNUM(x).mpz));
+   return (int64_t)mpz_get_si(&(BIGNUM(x).mpz));
 #else   
    const int size = sizeof(int64_t);
    const int numb = 8 * size - 0;
@@ -454,16 +464,18 @@ bgl_bignum_abs(obj_t x) {
 static obj_t
 bignum_add_pos_pos_aux(const mp_limb_t *x, const int size_x,
 		       const mp_limb_t *y, const int size_y) {
-   obj_t z = make_bignum(size_x);
+   obj_t z = make_bignum(size_x + 1);
    const int carry = mpn_add(BXLIMBS(z), x, size_x, y, size_y);
-   
+
    if (carry) {
-      BXLIMBS(z) = (mp_limb_t *)GC_REALLOC((obj_t)BXLIMBS(z),
-					   (size_x + 1)*sizeof(mp_limb_t));
+/*       obj_t o = GC_REALLOC(CREF(z), BIGNUM_ALLOC_SIZE(size_x + 1)); */
+/*       o->bignum.mpz._mp_d = (mp_limb_t *)&(o->bignum.mp_d);         */
+/*       z = BREF(o);                                                  */
       BXLIMBS(z)[size_x] = carry;
       BXSIZ(z) = BXALLOC(z) = size_x + 1;
-   } else
+   } else {
       BXSIZ(z) = BXALLOC(z) = size_x;
+   }
    
    return z;
 }
@@ -477,10 +489,11 @@ bignum_add_pos_pos_aux(const mp_limb_t *x, const int size_x,
 static obj_t
 bignum_add_pos_pos(const mp_limb_t *x, const int size_x,
 		   const mp_limb_t *y, const int size_y) {
-   if (size_x >= size_y)
+   if (size_x >= size_y) {
       return bignum_add_pos_pos_aux(x, size_x, y, size_y);
-   else
+   } else {
       return bignum_add_pos_pos_aux(y, size_y, x, size_x);
+   }
 }
 
 /*---------------------------------------------------------------------*/
@@ -501,11 +514,12 @@ bignum_add_pos_neg_aux(const mp_limb_t *x, const int size_x,
    count = size_x - 1;
    while (count > 0 && BXLIMBS(z)[count] == 0)
       count--;
-   count ++;
+   count++;
    
    if (count != size_x) {
-      BXLIMBS(z) = (mp_limb_t *)GC_REALLOC((obj_t)BXLIMBS(z),
-					   count * sizeof(mp_limb_t));
+/*       obj_t o = GC_REALLOC(CREF(z), BIGNUM_ALLOC_SIZE(count));      */
+/*       o->bignum.mpz._mp_d = (mp_limb_t *)&(o->bignum.mp_d);         */
+/*       z = BREF(o);                                                  */
       BXALLOC(z) = count;
    }
    
@@ -603,26 +617,29 @@ bgl_bignum_add(obj_t x, obj_t y) {
 /*---------------------------------------------------------------------*/
 BGL_RUNTIME_DEF obj_t
 bgl_bignum_sub(obj_t x, obj_t y) {
-   if (BXPOSITIVE(x))
-      if (BXPOSITIVE(y))
+   if (BXPOSITIVE(x)) {
+      if (BXPOSITIVE(y)) {
 	 return bignum_add_pos_neg(BXLIMBS(x), BXSIZ(x),
 				   BXLIMBS(y), BXSIZ(y));
-      else if (BXNEGATIVE(y))
+      } else if (BXNEGATIVE(y)) {
 	 return bignum_add_pos_pos(BXLIMBS(x), BXSIZ(x),
 				   BXLIMBS(y), -BXSIZ(y));
-      else
+      } else {
 	 return x;
-   else if (BXNEGATIVE(x))
-      if (BXPOSITIVE(y))
+      }
+   } else if (BXNEGATIVE(x)) {
+      if (BXPOSITIVE(y)) {
 	 return bignum_add_neg_neg(BXLIMBS(x), -BXSIZ(x),
 				   BXLIMBS(y), BXSIZ(y));
-      else if (BXNEGATIVE(y))
+      } else if (BXNEGATIVE(y)) {
 	 return bignum_add_pos_neg(BXLIMBS(y), -BXSIZ(y),
 				   BXLIMBS(x), -BXSIZ(x));
-      else
+      } else {
 	 return x;
-   else
+      }
+   } else {
       return bgl_bignum_neg(y);
+   }
 }
 
 /*---------------------------------------------------------------------*/
@@ -691,7 +708,7 @@ bgl_bignum_quotient(obj_t x, obj_t y) {
       obj_t r;
       const int size_q = size_x - size_y + 1;
       q = make_bignum(size_q);
-      r = make_bignum(size_y);
+      r = MAKE_STACK_BIGNUM(r, size_y);
       mpn_tdiv_qr(BXLIMBS(q), BXLIMBS(r), 0,
 		   BXLIMBS(x), size_x, BXLIMBS(y), size_y);
       bignum_set_size(q, size_q);
@@ -716,18 +733,19 @@ bgl_bignum_remainder(obj_t x, obj_t y) {
    obj_t r;
    const int size_x = BXABSIZ(x);
    const int size_y = BXABSIZ(y);
-   if (size_x < size_y)
+   if (size_x < size_y) {
       r = x;
-   else {
+   } else {
       obj_t q;
       const int size_q = size_x - size_y + 1;
-      q = make_bignum(size_q);
+      q = MAKE_STACK_BIGNUM(q, size_q);
       r = make_bignum(size_y);
       mpn_tdiv_qr(BXLIMBS(q), BXLIMBS(r), 0,
 		  BXLIMBS(x), size_x, BXLIMBS(y), size_y);
       bignum_set_size(r, size_y);
-      if (BXNEGATIVE(x))
+      if (BXNEGATIVE(x)) {
 	 BXSIZ(r) = -BXSIZ(r);
+      }
    }
 
    return r;
@@ -1134,7 +1152,7 @@ bgl_bignum_mask(obj_t x, long n) {
 /*    bgl_bignum_and ...                                               */
 /*---------------------------------------------------------------------*/
 BGL_RUNTIME_DEF obj_t
-bgl_bignum_and(obj_t x, long y) {
+bgl_bignum_and(obj_t x, obj_t y) {
    obj_t obj;
    mpz_t rop;
    

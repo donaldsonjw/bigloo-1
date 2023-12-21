@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Jan 19 10:19:33 1995                          */
-;*    Last change :  Thu Jul  8 11:28:41 2021 (serrano)                */
-;*    Copyright   :  1995-2021 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Fri Oct 13 07:36:56 2023 (serrano)                */
+;*    Copyright   :  1995-2023 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The convertion. The coercion and type checks are generated       */
 ;*    inside this module.                                              */
@@ -100,13 +100,14 @@
 ;*    type-warning/location ...                                        */
 ;*---------------------------------------------------------------------*/
 (define (type-warning/location loc function from to)
-   (user-warning/location loc
-			  function
-			  "Type error"
-			  (bigloo-type-error-msg
-			   ""
-			   (shape to)
-			   (shape from))))
+   (when *warning-types*
+      (user-warning/location loc
+	 function
+	 "Type error"
+	 (bigloo-type-error-msg
+	    ""
+	    (shape to)
+	    (shape from)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    runtime-type-error/id ...                                        */
@@ -228,7 +229,6 @@
 			   (coerce! node #unspecified from #f)
 			   (instantiate::literal (type to) (value "")))))))
 	  (else
-	   (tprint "e.1 " (shape node))
 	   (type-error/location loc (current-function) from to))))
       (else
        (type-error/location loc (current-function) from to))))
@@ -352,6 +352,8 @@
 ;*    make-one-class-conversion ...                                    */
 ;*---------------------------------------------------------------------*/
 (define (make-one-class-conversion from to check-op coerce-op node)
+   (trace (coerce 2) "make-one-class-conversion: " (shape node) " ("
+	  (shape from) " -> " (shape to) ")" #\Newline)
    (if (and (tclass? to) (type-subclass? from to))
        (do-convert coerce-op node from)
        (let* ((aux   (gensym 'aux))
@@ -418,7 +420,7 @@
 	  (lvtype-node! nnode)
 	  (spread-side-effect! nnode)
 	  nnode)))
-;*                                                                     */
+
 
 
 

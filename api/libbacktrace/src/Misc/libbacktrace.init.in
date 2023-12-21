@@ -4,7 +4,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Wed Nov  7 05:40:36 2001                          */
-;*    Last change :  Sat Dec  4 09:39:02 2021 (serrano)                */
+;*    Last change :  Tue Dec 28 19:09:03 2021 (serrano)                */
 ;*    Copyright   :  2001-21 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    The LIBBACKTRACE init file.                                      */
@@ -24,15 +24,19 @@
 ;*---------------------------------------------------------------------*/
 (cond-expand
    (bigloo-compile
-    ;; setup, bglbacktrace_setup must executed before bglpth_setup
-    ;; in multi-threaded executions
-    (set! *bigloo-libraries-c-setup*
-       (cons "bglbacktrace_setup" *bigloo-libraries-c-setup*))
+    ;; compiler traces
+    (set! *compiler-debug-trace* 0)
     ;; cc options
-    (set! *cc-options*
-       (cons "-g" *cc-options*))
+    (let ((fpopt (bigloo-config 'c-compiler-fp-option)))
+       (when (string? fpopt)
+	  (set! *cc-options*
+	     (cons fpopt *cc-options*))))
     (set! *strip*
        #f)
+    ;; setup
+    (set! *bigloo-libraries-c-setup*
+       (cons "bglbacktrace_setup"
+	  *bigloo-libraries-c-setup*))
     ;; libbacktrace libraries
     (set! *ld-post-options*
        (cons "@LIBBACKTRACELIBS@" *ld-post-options*))

@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Mar 16 18:14:47 1995                          */
-;*    Last change :  Sun Jun 20 08:44:10 2021 (serrano)                */
-;*    Copyright   :  1995-2021 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Mon Apr  3 15:34:57 2023 (serrano)                */
+;*    Copyright   :  1995-2023 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The emission of the C code                                       */
 ;*=====================================================================*/
@@ -243,11 +243,11 @@
       (emit-bdb-loc #unspecified)
       (fprint *c-port* "BGL_EXPORTED_DEF obj_t " sym "() {")
       (emit-bdb-loc #unspecified)
-      (fprint *c-port* "obj_t res = " (global-name global) "( 0, \""
-	 (car *src-files*) "\" );")
+      (fprint *c-port* "obj_t res = " (global-name global) "(0, \""
+	 (car *src-files*) "\");")
       (fprint *c-port* "BGL_MVALUES_NUMBER_SET(2);")
-      (fprint *c-port* "BGL_MVALUES_VAL_SET(1,string_to_bstring( \""
-	 (global-module global) "\" ));")
+      (fprint *c-port* "BGL_MVALUES_VAL_SET(1,string_to_bstring(\""
+	 (global-module global) "\"));")
       (fprint *c-port* "return res;")
       (emit-bdb-loc #unspecified)
       (fprint *c-port* "}")
@@ -349,11 +349,13 @@
        (display (untrigraph (string-for-read value)) *c-port*)
        (display #\" *c-port*))
       ((fixnum? value)
-       (display "((" *c-port*)
-       (display (string-sans-$ (type-name *long*)) *c-port*)
-       (display ")" *c-port*)
        (display value *c-port*)
-       (display ")" *c-port*))
+       (display "L" *c-port*))
+;*        (display "((" *c-port*)                                      */
+;*        (display (string-sans-$ (type-name *long*)) *c-port*)        */
+;*        (display ")" *c-port*)                                       */
+;*        (display value *c-port*)                                     */
+;*        (display ")" *c-port*))                                      */
       ((flonum? value)
        (cond
 	  ((nanfl? value)

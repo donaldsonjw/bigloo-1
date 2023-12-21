@@ -1,10 +1,10 @@
 #*=====================================================================*/
-#*    serrano/prgm/project/bigloo/tools/Makefile                       */
+#*    serrano/prgm/project/bigloo/bigloo/tools/Makefile                */
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Tue Jan 30 15:19:19 1996                          */
-#*    Last change :  Sun Jul  9 10:27:29 2017 (serrano)                */
-#*    Copyright   :  1996-2017 Manuel Serrano, see LICENSE file        */
+#*    Last change :  Wed Dec 13 10:10:50 2023 (serrano)                */
+#*    Copyright   :  1996-2023 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The makefile to build args                                       */
 #*=====================================================================*/
@@ -34,11 +34,13 @@ C_SRC		= $(C_OBJ:%.o=%.c)
 OBJ		= $(C_OBJ) $(SCM_OBJ)
 SRC		= $(C_SRC) $(SCM_SRC)
 
-POPULATION	= $(SRC) basm hglog.scm Makefile
+POPULATION	= $(SRC) basm hglog.scm Makefile cfg.scm
 
 #*---------------------------------------------------------------------*/
 #*    the goals.                                                       */
 #*---------------------------------------------------------------------*/
+all: $(BINDIR)/bglcfg
+
 pop:
 	@ echo $(POPULATION:%=tools/%)
 
@@ -72,16 +74,16 @@ distrib:
 	@ $(MAKE) clean
 
 #*---------------------------------------------------------------------*/
-#*    $(BIN)/copyright                                                 */
+#*    $(BINDIR)/copyright                                              */
 #*---------------------------------------------------------------------*/
 .PHONY: copyright
-copyright: $(BIN)/copyright
+copyright: $(BINDIR)/copyright
 
-$(BIN)/copyright: copyright.o license.o
-	@ $(CC) -o $(BIN)/copyright $(CFLAGS) copyright.o license.o
+$(BINDIR)/copyright: copyright.o license.o
+	$(CC) -o $(BINDIR)/copyright $(CFLAGS) copyright.o license.o
 
-$(BIN)/libcversion: libcversion.o
-	@ $(CC) -o $(BIN)/libcversion $(CFLAGS) libcversion.o
+$(BINDIR)/libcversion: libcversion.o
+	$(CC) -o $(BINDIR)/libcversion $(CFLAGS) libcversion.o
 
 license.c: $(LICENSE)
 	@- $(RM) -f $@
@@ -91,15 +93,29 @@ license.c: $(LICENSE)
 	@ echo "}" >> $@
 
 #*---------------------------------------------------------------------*/
+#*    cfg ...                                                          */
+#*---------------------------------------------------------------------*/
+.PHONY: bglcfg
+bglcfg: $(BINDIR)/bglcfg
+
+$(BINDIR)/bglcfg: cfg.o
+	$(BIGLOO) cfg.o -o $(BINDIR)/bglcfg
+
+#*---------------------------------------------------------------------*/
 #*    Suffixes                                                         */
 #*---------------------------------------------------------------------*/
 .SUFFIXES:
-.SUFFIXES: .c .o
+.SUFFIXES: .c .o .scm
 
 #*---------------------------------------------------------------------*/
 #*    .c.o                                                             */
 #*---------------------------------------------------------------------*/
 .c.o:
-	@ echo $*.c:
-	@ $(CC) -c $(CFLAGS) $*.c -o $*.o
+	$(CC) -c $(CFLAGS) $*.c -o $*.o
+
+#*---------------------------------------------------------------------*/
+#*    .scm.o                                                           */
+#*---------------------------------------------------------------------*/
+.scm.o:
+	$(BIGLOO) -c $(BFLAGS) $*.scm -o $*.o
 

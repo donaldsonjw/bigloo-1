@@ -1,10 +1,10 @@
 /*=====================================================================*/
-/*    .../prgm/project/bigloo/api/pthread/src/Java/bglpthread.java     */
+/*    .../bigloo-unstable/api/pthread/src/Java/bglpthread.java         */
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Fri Feb 22 12:12:04 2002                          */
-/*    Last change :  Mon Oct 24 14:11:20 2016 (serrano)                */
-/*    Copyright   :  2002-16 Manuel Serrano                            */
+/*    Last change :  Mon Dec 18 21:57:50 2023 (serrano)                */
+/*    Copyright   :  2002-23 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Java utilities for native Bigloo fair threads implementation.    */
 /*=====================================================================*/
@@ -20,11 +20,11 @@ import bigloo.*;
 /*    bglpthread                                                       */
 /*---------------------------------------------------------------------*/
 public class bglpthread extends Thread {
-   private Object specific = bigloo.foreign.BUNSPEC;
-   private Object cleanup = bigloo.foreign.BUNSPEC;
-   private Object thread = bigloo.foreign.BUNSPEC;
-   private procedure thunk;
-   protected bgldynamic env;
+   public Object specific = bigloo.foreign.BUNSPEC;
+   public Object cleanup = bigloo.foreign.BUNSPEC;
+   public Object thread = bigloo.foreign.BUNSPEC;
+   public procedure thunk;
+   public bgldynamic env;
 
    static bglpthread nilthread = new bglpthread();
    
@@ -80,8 +80,7 @@ public class bglpthread extends Thread {
    // The thread entry-point
    public void start( Object t, boolean _b ) {
       thread = t;
-      env = new bgldynamic( bgldynamic.abgldynamic.get() );
-      
+      env = new bglpdynamic( bgldynamic.abgldynamic.get() );
       start();
    }
 
@@ -96,7 +95,7 @@ public class bglpthread extends Thread {
 	    System.exit( 1 );
 	 }
       } finally {
-          bglpmutex.mutexes_unlock( thread );
+          mutexes_unlock();
 
 	 if( cleanup instanceof procedure ) {
 	    ((procedure)cleanup).funcall1( thread );
@@ -104,16 +103,26 @@ public class bglpthread extends Thread {
       }
    }
 
+   // mutex cleanup
+   public void mutexes_unlock() {
+      bglpmutex.mutexes_unlock(thread);
+   }
+   
    // Terminate a thread
    public static boolean terminate( bglpthread thread ) {
       thread.interrupt();
       return true;
    }
 
+   // send a signal
+   public static int kill( bglpthread thread, int n ) {
+      // not implemented
+      return -1;
+   }
+
    // Returns the current thread
    public static Object current_thread() {
       Thread t = currentThread();
-
       if( t instanceof bglpthread ) {
 	 return ((bglpthread)t).thread;
       } else {

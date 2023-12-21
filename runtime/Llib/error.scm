@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Jan 20 08:19:23 1995                          */
-;*    Last change :  Thu Oct  7 08:22:47 2021 (serrano)                */
+;*    Last change :  Fri Jul 14 10:44:41 2023 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    The error machinery                                              */
 ;*    -------------------------------------------------------------    */
@@ -367,7 +367,8 @@
       ((=fx sysno $errno-typename-error)
        (raise (typename-error #f #f proc msg obj)))
       ((=fx sysno $errno-index-out-of-bound-error)
-       (raise (index-out-of-bounds-error #f #f proc obj msg -1)))
+       (raise (instantiate::&index-out-of-bounds-error (fname #f) (location #f) (proc proc)
+                 (msg msg) (obj obj) (index -1))))
       (else
        (error proc msg obj))))
 
@@ -717,8 +718,9 @@
 	 (display-circle proc port)
 	 (display #":\n" port)
 	 (display-circle msg port)
-	 (display " -- " port)
-	 (display-circle obj port)
+	 (unless (eq? obj '%no-error-obj)
+	    (display " -- " port)
+	    (display-circle obj port))
 	 (newline port)
 	 (display-trace-stack (or stack (get-trace-stack)) port)
 	 (flush-output-port port))))
@@ -738,29 +740,37 @@
 ;*    notify-&error/location-loc ...                                   */
 ;*---------------------------------------------------------------------*/
 (define (notify-&error/location-loc err fname line loc string col)
-   (with-access::&error err (proc msg obj stack)
-      (let ((port (current-error-port)))
-	 ;; we flush error-port
-	 (flush-output-port port)
-	 (newline port)
-	 (let* ((space-string (if (>fx col 0) (make-string col #\space) ""))
-		(l (string-length string))
-		(n-col (if (>=fx col l) l col)))
-	    ;; we ajust tabulation in space string.
-	    (fix-tabulation! n-col string space-string)
-	    ;; we now print the error message
-	    (print-cursor fname line loc string space-string)
-	    ;; we display the error message
-	    (display "*** ERROR:" port)
-	    (display-circle proc port)
-	    (newline port)
-	    (display-circle msg port)
-	    (display " -- " port)
-	    (display-circle obj port)
-	    (newline port)
-	    (display-trace-stack (or stack (get-trace-stack)) port)
-	    ;; we are now done, we flush
-	    (flush-output-port port)))))
+   (let ((len (string-length string)))
+      (if (>fx len 256)
+	  (let* ((ncol 60)
+		 (nstring (substring string (-fx col ncol) (+fx col 10))))
+	     (notify-&error/location-loc err fname line loc
+		(string-append "..." nstring "...")
+		(+fx ncol 3)))
+	  (with-access::&error err (proc msg obj stack)
+	     (let ((port (current-error-port)))
+		;; we flush error-port
+		(flush-output-port port)
+		(newline port)
+		(let* ((space-string (if (>fx col 0) (make-string col #\space) ""))
+		       (l (string-length string))
+		       (n-col (if (>=fx col l) l col)))
+		   ;; we ajust tabulation in space string.
+		   (fix-tabulation! n-col string space-string)
+		   ;; we now print the error message
+		   (print-cursor fname line loc string space-string)
+		   ;; we display the error message
+		   (display "*** ERROR:" port)
+		   (display-circle proc port)
+		   (newline port)
+		   (display-circle msg port)
+		   (unless (eq? obj '%no-error-obj)
+		      (display " -- " port)
+		      (display-circle obj port))
+		   (newline port)
+		   (display-trace-stack (or stack (get-trace-stack)) port)
+		   ;; we are now done, we flush
+		   (flush-output-port port)))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    notify-&error/loc ...                                            */
@@ -780,7 +790,10 @@
 (define (open-for-error fname)
    (cond
       ((file-exists? fname)
-       (open-input-file fname))
+       (unless (directory? fname)
+	  (with-handler
+	     (lambda (e) #f)
+	     (open-input-file fname))))
       ((string=? fname "stdin")
        (open-input-string (input-port-buffer (current-input-port))))
       ((string-prefix? "string://" fname)
@@ -793,6 +806,8 @@
 ;*---------------------------------------------------------------------*/
 (define (filename-for-error file #!optional (sz 255))
    (cond
+      ((<fx sz 0)
+       "...")
       ((file-exists? file)
        (relative-file-name file))
       ((string-prefix? "string://" file)
@@ -801,6 +816,8 @@
 	   (string-append (substring file 9 (+fx sz 6)) "...")))
       ((<=fx (string-length file) sz)
        file)
+      ((<fx sz 4)
+       "...")
       (else
        (string-append (substring file 0 (-fx sz 3)) "..."))))
 
@@ -994,10 +1011,10 @@
 ;*---------------------------------------------------------------------*/
 (define (display-trace-stack stack port #!optional (offset 1))
 
-   (define (filename file num)
+   (define (filename file num sz)
       (cond
 	 ((=fx num 1)
-	  (filename-for-error file 12))
+	  (filename-for-error file sz))
 	 ((file-exists? file)
 	  file)
 	 (else
@@ -1006,8 +1023,11 @@
    (define (display-trace-stack-frame frame level num)
       (match-case frame
 	 ((?name ?loc . (and (? alist?) ?rest))
-	  (let ((margin (assq 'margin rest))
-		(fmt (assq 'format rest)))
+	  (let* ((margin (assq 'margin rest))
+		 (fmt (assq 'format rest))
+		 (nm (if (and (pair? fmt) (string? (cdr fmt)))
+			 (format (cdr fmt) name)
+			 name)))
 	     ;; margin
 	     (if (and (pair? margin) (char? (cdr margin)))
 		 (display (cdr margin) port)
@@ -1020,23 +1040,27 @@
 	     (display level port)
 	     (display ". " port)
 	     ;; frame name
-	     (if (and (pair? fmt) (string? (cdr fmt)))
-		 (display (format (cdr fmt) name) port)
-		 (display name port))
+	     (display name port)
 	     (cond
 		((>fx num 1)
 		 (display " (* " port)
 		 (display num port)
 		 (display ")" port))
 		(loc
-		 (display ", " port)
 		 (multiple-value-bind (file lnum lpoint lstring)
 		    (location-line-num loc)
 		    ;; file name
-		    (when file
-		       (display (filename file num) port))
+		    (when (and file (not (equal? file ".")))
+		       (display ", " port)
+		       (display (filename file num
+				   (if (string? nm)
+				       (-fx (-fx 80 4) (string-length nm))
+				       60))
+			  port))
 		    ;; line num
 		    (cond
+		       ((and (fixnum? lpoint) (=fx lpoint 0))
+			#unspecified)
 		       (lnum
 			(display ":" port)
 			(display lnum port))

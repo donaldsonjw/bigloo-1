@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue May  6 11:55:29 2014                          */
-;*    Last change :  Tue Oct 23 11:30:19 2018 (serrano)                */
-;*    Copyright   :  2014-18 Manuel Serrano                            */
+;*    Last change :  Sat May  6 07:31:19 2023 (serrano)                */
+;*    Copyright   :  2014-23 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    LIBUV types                                                      */
 ;*=====================================================================*/
@@ -28,6 +28,7 @@
 	      (%onclose (default #f))
 	      (%gcmarkshead::pair-nil (default '()))
 	      (%gcmarkstail::pair-nil (default '()))
+	      (%gcmark::obj (default #f))
 	      (closed::bool (default #f)))
 
 	   (class UvLoop::UvHandle
@@ -35,15 +36,12 @@
 
 	   (abstract-class UvWatcher::UvHandle
 	      (loop::UvLoop read-only)
-	      (cb::procedure (default list)))
+	      (cb::procedure (default list))
+	      (%data::void* (default $void*_nil)))
 
 	   (class UvStream::UvHandle
 	      (loop::UvLoop read-only)
-	      (%alloc::obj (default #f))
-	      (%offset::obj (default 0))
-	      (%proca (default #f))
-	      (%procc (default #f))
-	      (%callback (default #f)))
+	      (%data::void* (default $void*_nil)))
 
 	   (class UvTcp::UvStream)
 	   
@@ -162,7 +160,7 @@
 
 	   (uv-handle-type-symbol ::int)
 	   (uv-guess-handle::symbol ::int)
-	   (inline uv-push-gcmark! ::UvHandle o)
+	   (inline uv-push-gcmark! ::UvHandle o msg)
 	   (uv-pop-gcmark! ::UvHandle o)
 	   (uv-gcmarks-empty?::bool o::UvHandle))
 
@@ -270,7 +268,7 @@
 ;*---------------------------------------------------------------------*/
 ;*    uv-push-gcmark! ...                                              */
 ;*---------------------------------------------------------------------*/
-(define-inline (uv-push-gcmark! o::UvHandle val)
+(define-inline (uv-push-gcmark! o::UvHandle val msg)
    (with-access::UvHandle o (%gcmarkshead %gcmarkstail)
       (if (null? %gcmarkstail)
 	  (begin

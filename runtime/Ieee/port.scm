@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Mon Feb 20 16:53:27 1995                          */
-;*    Last change :  Sun Aug 25 09:19:02 2019 (serrano)                */
+;*    Last change :  Wed Oct 11 14:03:04 2023 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    6.10.1 Ports (page 29, r4)                                       */
 ;*    -------------------------------------------------------------    */
@@ -38,6 +38,7 @@
 	    __bignum
 	    __rgc
 	    __bit
+	    __mmap
 	    
 	    __r4_vectors_6_8
 	    __r4_strings_6_7
@@ -64,6 +65,8 @@
 		   "INPUT_PROCEDURE_PORTP")
 	    (macro c-input-gzip-port?::bool (::obj)
 		   "INPUT_GZIP_PORTP")
+	    (macro $input-mmap-port?::bool (::obj)
+		   "INPUT_MMAP_PORTP")
 	    (macro c-output-port?::bool (::obj)
 		   "OUTPUT_PORTP")
 	    (macro c-output-string-port?::bool (::obj)
@@ -89,12 +92,14 @@
 		   "BGL_INPUT_GZIP_PORT_INPUT_PORT")
 	    
 	    ($open-input-file::obj (::bstring ::bstring) "bgl_open_input_file")
+	    ($open-input-descriptor::obj (::int ::bstring) "bgl_open_input_descriptor")
 	    ($open-input-pipe::obj (::bstring ::bstring) "bgl_open_input_pipe")
 	    ($open-input-resource::obj (::bstring ::bstring) "bgl_open_input_resource")
  	    ($open-input-c-string::obj (::string) "bgl_open_input_c_string")
 	    ($reopen-input-c-string::obj (::input-port ::string) "bgl_reopen_input_c_string")
 	    ($open-input-substring::input-port (::bstring ::long ::long) "bgl_open_input_substring")
 	    ($open-input-substring!::input-port (::bstring ::long ::long) "bgl_open_input_substring_bang")
+	    ($open-input-mmap::input-port (::mmap ::bstring ::long ::long) "bgl_open_input_mmap")
 	    ($open-input-procedure::input-port (::procedure ::bstring) "bgl_open_input_procedure")
 	    ($input-port-timeout-set!::bool (::input-port ::long) "bgl_input_port_timeout_set")
 	    ($output-port-timeout-set!::bool (::output-port ::long) "bgl_output_port_timeout_set")
@@ -188,9 +193,13 @@
 		   "bgl_output_port_buffer_set")
 	    
 	    ($directory?::bool (::string) "bgl_directoryp")
-	    ($directory->list::obj (::string) "bgl_directory_to_list")
-	    ($directory->path-list::obj (::string ::int ::char)
-					"bgl_directory_to_path_list")
+	    ($directory-length::long (::string) "bgl_directory_length")
+	    ($directory->list::pair-nil (::string) "bgl_directory_to_list")
+	    ($directory->path-list::pair-nil (::string ::int ::char)
+	       "bgl_directory_to_path_list")
+	    ($directory->vector::vector (::string) "bgl_directory_to_vector")
+	    ($directory->path-vector::vector (::string ::int ::char)
+					"bgl_directory_to_path_vector")
 	    ($modification-time::elong (::string) "bgl_last_modification_time")
 	    ($change-time::elong (::string) "bgl_last_change_time")
 	    ($access-time::elong (::string) "bgl_last_access_time")
@@ -244,6 +253,8 @@
 	       
 	       (method static $open-input-file::obj (::bstring ::bstring)
 		  "bgl_open_input_file")
+	       (method static $open-input-descriptor::obj (::int ::bstring)
+		  "bgl_open_input_descriptor")
 	       (method static $open-input-pipe::obj (::bstring ::bstring)
 		  "bgl_open_input_pipe")
 	       (method static $open-input-resource::obj (::bstring ::bstring)
@@ -256,6 +267,10 @@
 		  "bgl_open_input_substring")
 	       (method static $open-input-substring!::input-port (::bstring ::int ::int)
 		  "bgl_open_input_substring_bang")
+	       (method static $open-input-mmap::obj (::mmap ::bstring ::long ::long)
+		  "bgl_open_input_mmap")
+               (method static $input-mmap-port?::bool (::obj)
+		   "INPUT_MMAP_PORTP")
 	       (method static $open-input-procedure::obj (::procedure ::bstring)
 		  "bgl_open_input_procedure")
 	       (method static $input-port-timeout-set!::bool (::input-port ::long)
@@ -375,8 +390,12 @@
 	       
 	       (method static $directory?::bool (::string)
 		  "bgl_directoryp")
+	       (method static $directory-length::long (::string)
+		  "bgl_directory_length")
 	       (method static $directory->list::obj (::string)
 		  "bgl_directory_to_list")
+               (method static $directory->vector::obj (::string)
+		  "bgl_directory_to_vector")
 	       (method static $modification-time::elong (::string)
 		  "bgl_last_modification_time")
 	       (method static $change-time::elong (::string)
@@ -413,6 +432,7 @@
 	    (inline input-string-port? ::obj)
 	    (inline input-procedure-port? ::obj)
 	    (inline input-gzip-port? ::obj)
+	    (inline input-mmap-port? ::obj)
 	    (inline output-port? ::obj)
 	    (inline port?::bool ::obj)
 	    (inline output-string-port? ::obj)
@@ -438,10 +458,13 @@
 	    (with-error-to-procedure ::procedure ::procedure)
 	    
 	    (open-input-file ::bstring #!optional (bufinfo #t) (timeout 5000000))
+	    (open-input-descriptor ::int #!optional (bufinfo #t))
 	    (open-input-string::input-port string::bstring
 	       #!optional (start 0) (end (string-length string)))
 	    (open-input-string!::input-port string::bstring
 	       #!optional (start 0) (end (string-length string)))
+	    (open-input-mmap::input-port mmap::mmap
+	       #!optional (start 0) (end (elong->fixnum (mmap-length mmap))))
 	    (open-input-procedure ::procedure #!optional (bufinfo #t))
 	    (open-input-gzip-port ::input-port  #!optional (bufinfo #t))
 	    
@@ -503,8 +526,11 @@
 	    (inline output-port-truncate::bool ::output-port ::long)
 	    (copy-file ::string ::string)
 	    (inline directory?::bool ::string)
+	    (inline directory-length ::string)
 	    (inline directory->list ::string)
 	    (directory->path-list ::bstring)
+	    (inline directory->vector::vector ::string)
+	    (directory->path-vector::vector ::bstring)
 	    (inline file-modification-time::elong ::string)
 	    (inline file-change-time::elong ::string)
 	    (inline file-access-time::elong ::string)
@@ -606,6 +632,12 @@
 ;*---------------------------------------------------------------------*/
 (define-inline (input-gzip-port? obj)
    (c-input-gzip-port? obj))
+
+;*---------------------------------------------------------------------*/
+;*    input-mmap-port? ...                                             */
+;*---------------------------------------------------------------------*/
+(define-inline (input-mmap-port? obj)
+   ($input-mmap-port? obj))
 
 ;*---------------------------------------------------------------------*/
 ;*    output-port? ...                                                 */
@@ -890,7 +922,8 @@
      ("zlib:" . ,open-input-zlib-file)
      ("inflate:" . ,open-input-inflate-file)
      ("/resource/" . ,%open-input-resource)
-     ("ftp://" . ,open-input-ftp-file)))
+     ("ftp://" . ,open-input-ftp-file)
+     ("fd:" . ,%open-input-descriptor)))
 
 ;*---------------------------------------------------------------------*/
 ;*    input-port-protocols ...                                         */
@@ -948,6 +981,13 @@
 ;*---------------------------------------------------------------------*/
 (define (%open-input-file string buf tmt)
    ($open-input-file string buf))
+
+;*---------------------------------------------------------------------*/
+;*    %open-input-descriptor ...                                       */
+;*---------------------------------------------------------------------*/
+(define (%open-input-descriptor string buf tmt)
+   (let ((fd (string->integer (substring string 3))))
+      ($open-input-descriptor fd buf)))
 
 ;*---------------------------------------------------------------------*/
 ;*    %open-input-pipe ...                                             */
@@ -1050,6 +1090,13 @@
 		    (loop (cdr protos))))))))
 
 ;*---------------------------------------------------------------------*/
+;*    open-input-descriptor ...                                        */
+;*---------------------------------------------------------------------*/
+(define (open-input-descriptor fd #!optional (bufinfo #t))
+   (let ((buffer (get-port-buffer "open-input-file" bufinfo c-default-io-bufsiz)))
+      ($open-input-descriptor fd buffer)))
+   
+;*---------------------------------------------------------------------*/
 ;*    open-input-string ...                                            */
 ;*---------------------------------------------------------------------*/
 (define (open-input-string string
@@ -1082,6 +1129,27 @@
        (error "open-input-string!" "End offset out of bounds" end))
       (else
        ($open-input-substring! string start end))))
+
+;*---------------------------------------------------------------------*/
+;*    open-input-mmap ...                                              */
+;*---------------------------------------------------------------------*/
+(define (open-input-mmap mmap::mmap
+	   #!optional (start 0) (end (elong->fixnum (mmap-length mmap))))
+   (cond
+      ((<fx start 0)
+       (error "open-input-mmap" "Illegal start offset" start))
+      ((>fx start (elong->fixnum (mmap-length mmap)))
+       (error "open-input-mmap" "Start offset out of bounds" start))
+      ((>fx start end)
+       (error "open-input-mmap" "Start offset greater than end" start))
+      ((>fx end (elong->fixnum (mmap-length mmap)))
+       (error "open-input-mmap" "End offset out of bounds" end))
+      (else
+       (let ((buffer (get-port-buffer "open-input-file" #f
+			(if (<fx (-fx end start) c-default-io-bufsiz)
+			    (-fx end start)
+			    c-default-io-bufsiz))))
+	  ($open-input-mmap mmap buffer start end)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    open-input-procedure ...                                         */
@@ -1520,6 +1588,12 @@
    ($directory? string))
 
 ;*---------------------------------------------------------------------*/
+;*    directory-length ...                                             */
+;*---------------------------------------------------------------------*/
+(define-inline (directory-length string)
+   ($directory-length string))
+
+;*---------------------------------------------------------------------*/
 ;*    directory->list ...                                              */
 ;*---------------------------------------------------------------------*/
 (define-inline (directory->list string)
@@ -1539,14 +1613,43 @@
 	      ($directory->path-list dir (-fx l 1) (file-separator)))
 	     (else
 	      (map! (lambda (f) (string-append dir f))
-		    (directory->list dir)))))
+		 (directory->list dir)))))
 	 (else
 	  (cond-expand
 	     (bigloo-c
 	      ($directory->path-list dir l (file-separator)))
 	     (else
 	      (map! (lambda (f) (make-file-name dir f))
-		    (directory->list dir))))))))
+		 (directory->list dir))))))))
+	   
+;*---------------------------------------------------------------------*/
+;*    directory->vector ...                                            */
+;*---------------------------------------------------------------------*/
+(define-inline (directory->vector string)
+   ($directory->vector string))
+
+;*---------------------------------------------------------------------*/
+;*    directory->path-vector ...                                       */
+;*---------------------------------------------------------------------*/
+(define (directory->path-vector dir)
+   (let ((l (string-length dir)))
+      (cond
+	 ((=fx l 0)
+	  '#())
+	 ((char=? (string-ref dir (-fx l 1)) (file-separator))
+	  (cond-expand
+	     (bigloo-c
+	      ($directory->path-vector dir (-fx l 1) (file-separator)))
+	     (else
+	      (map! (lambda (f) (string-append dir f))
+		 (directory->list dir)))))
+	 (else
+	  (cond-expand
+	     (bigloo-c
+	      ($directory->path-vector dir l (file-separator)))
+	     (else
+	      (map! (lambda (f) (make-file-name dir f))
+		 (directory->list dir))))))))
 	   
 ;*---------------------------------------------------------------------*/
 ;*    @deffn file-modification-time@ ...                               */

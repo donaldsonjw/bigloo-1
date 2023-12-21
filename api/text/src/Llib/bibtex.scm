@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/api/text/src/Llib/bibtex.scm         */
+;*    .../prgm/project/bigloo/bigloo/api/text/src/Llib/bibtex.scm      */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Oct 12 14:57:58 2001                          */
-;*    Last change :  Fri Dec 13 12:50:31 2013 (serrano)                */
-;*    Copyright   :  2001-13 Manuel Serrano                            */
+;*    Last change :  Mon Dec 18 10:56:39 2023 (serrano)                */
+;*    Copyright   :  2001-23 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    A BibTeX parser, produces a list of UTF-8 entries.               */
 ;*=====================================================================*/
@@ -185,6 +185,8 @@
        (list 'CHAR (the-coord (the-port)) "\303\271"))
       ((or "{\\`U}" "\\`U")
        (list 'CHAR (the-coord (the-port)) "\303\231"))
+      ("\\%"
+       (list 'CHAR (the-coord (the-port)) "%"))
       ;; latex commands
       ((: #\\ (or alpha (in "$&%#_{}")) (* (or alpha digit)))
        (let ((s (the-substring 1 (the-length))))
@@ -346,7 +348,7 @@
 ;*---------------------------------------------------------------------*/
 (define (bibtex-parse-authors val)
    (define (parse-author auth)
-      (let ((m (pregexp-match "^({[^}]+}) ({[^}]+})" auth)))
+      (let ((m (pregexp-match "^([{][^}]+[}]) ([{][^}]+[}])" auth)))
 	 (if m
 	     (list (string-capitalize! (caddr m)) (cadr m))
 	     (let ((m (pregexp-match "^([^,]+),+[ \t\n](.+)$" auth)))

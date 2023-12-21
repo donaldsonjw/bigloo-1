@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Sat Jan  4 06:12:28 2014                          */
-;*    Last change :  Tue Sep 10 16:46:58 2019 (serrano)                */
-;*    Copyright   :  2014-19 Manuel Serrano                            */
+;*    Last change :  Thu Oct 12 13:22:30 2023 (serrano)                */
+;*    Copyright   :  2014-23 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    JSON support                                                     */
 ;*=====================================================================*/
@@ -17,11 +17,19 @@
    (option (set! *unsafe-type* #t)
 	   (set! *unsafe-arity* #t))
 
-   (export (json-parse o::input-port #!key
-	      array-alloc array-set array-return
-	      object-alloc object-set object-return
-	      parse-error (undefined #t) reviver expr
-	      constant-alloc string-alloc)))
+   (export (json-parse ::input-port #!key
+              (array-alloc (lambda () (make-cell '()))) 
+              (array-set (lambda (a i v) (cell-set! a (cons v (cell-ref a)))))
+              (array-return (lambda (a i) (list->vector (reverse! (cell-ref a)))))
+              (object-alloc (lambda ()  (make-cell '()))) 
+              (object-set (lambda (obj key value) (cell-set! obj 
+                                                     (cons (cons key value)
+                                                        (cell-ref obj)))))
+              (object-return (lambda (obj)  (cell-ref obj)))
+              (parse-error #f)
+	      (undefined #t) reviver expr
+	      constant-alloc string-alloc)
+           (read-json #!optional (port::input-port (current-input-port)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    return ...                                                       */
@@ -163,12 +171,27 @@
 (define *eot* (cons 1 2))
 
 ;*---------------------------------------------------------------------*/
+;*    json-parse-error ...                                             */
+;*---------------------------------------------------------------------*/
+(define (json-parse-error err msg obj fname loc)
+   (if err
+       (err msg obj `(at ,fname ,loc))
+       (error/location "parse-json" msg obj fname loc)))
+   
+;*---------------------------------------------------------------------*/
 ;*    json-parse ...                                                   */
 ;*---------------------------------------------------------------------*/
 (define (json-parse o::input-port #!key
-	   array-alloc array-set array-return
-	   object-alloc object-set object-return
-	   parse-error (undefined #t) reviver expr
+           (array-alloc (lambda () (make-cell '()))) 
+           (array-set (lambda (a i v) (cell-set! a (cons v (cell-ref a)))))
+           (array-return (lambda (a i) (list->vector (reverse! (cell-ref a)))))
+           (object-alloc (lambda ()  (make-cell '()))) 
+           (object-set (lambda (obj key value) (cell-set! obj 
+                                                  (cons (cons key value)
+                                                     (cell-ref obj)))))
+           (object-return (lambda (obj)  (cell-ref obj)))
+           (parse-error #f)
+           (undefined #t) reviver expr
 	   constant-alloc string-alloc)
    
    (define (check-procedure proc arity name)
@@ -200,18 +223,22 @@
       (let ((token (read-token)))
 	 (if (eq? (car token) type)
 	     token
-	     (parse-error (format "token \"~a\" expected" type)
+	     (json-parse-error
+		parse-error (format "token \"~a\" expected" type)
+		(car token)
 		(caddr token)
 		(cadddr token)))))
 
    (define (parse-token-error token)
       (if (eq? (car token) 'ERROR)
-	  (parse-error
+	  (json-parse-error
+	     parse-error
 	     (format "wrong token: \"~a\"" (cadr token))
-	     (caddr token) (cadddr token))
-	  (parse-error
+	     (car token) (caddr token) (cadddr token))
+	  (json-parse-error
+	     parse-error
 	     (format "wrong ~a token: \"~a\"" (car token) (cadr token))
-	     (caddr token) (cadddr token))))
+	     (car token) (caddr token) (cadddr token))))
    
    (define (parse-array array)
       (let ((val (parse-text 'ANGLE-CLO)))
@@ -229,8 +256,9 @@
 			     (array-set array i val)
 			     (loop (+fx i 1))))
 			 (else
-			  (parse-error "syntax error"
-			     (caddr token) (cadddr token))))))))))
+			  (json-parse-error
+			     parse-error "syntax error"
+			     (car token) (caddr token) (cadddr token))))))))))
    
    (define (parse-object object)
       (let loop ()
@@ -276,7 +304,7 @@
    (check-procedure object-alloc 0 :object-alloc)
    (check-procedure object-set 3 :object-set)
    (check-procedure object-return 1 :object-return)
-   (check-procedure parse-error 3 :parse-error)
+   (when (procedure? parse-error) (check-procedure parse-error 3 :parse-error))
    (when reviver (check-procedure reviver 3 :reviver))
 
    (let ((val (parse-text #f)))
@@ -292,4 +320,5 @@
 		      #f #f)))))
       val))
 
-
+(define (read-json #!optional (port::input-port (current-input-port)))
+   (json-parse port))

@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/api/sqlite/src/Llib/sqlite.scm       */
+;*    .../project/bigloo/bigloo/api/sqlite/src/Llib/sqlite.scm         */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Erick Gallesio                                    */
 ;*    Creation    :  Thu Nov 10 13:55:46 2005                          */
-;*    Last change :  Fri Dec 13 12:15:43 2013 (serrano)                */
-;*    Copyright   :  2005-13 Manuel Serrano                            */
+;*    Last change :  Fri Oct 13 19:07:34 2023 (serrano)                */
+;*    Copyright   :  2005-23 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    SQLITE Scheme binding                                            */
 ;*=====================================================================*/
@@ -42,11 +42,15 @@
 	    (%setup-sqltiny! ::sqltiny)
 	    (%setup-sqlite! ::sqlite)
 	    
-	    (generic sqlite-close ::%sqlite)
+	    (sqlite-config . args)
 	    
+	    (generic sqlite-close ::%sqlite)
 	    (generic sqlite-exec ::%sqlite ::bstring . o)
 	    (generic sqlite-eval ::%sqlite ::procedure ::bstring . o)
+	    (generic sqlite-get ::%sqlite ::procedure ::bstring . o)
 	    (generic sqlite-map::pair-nil ::%sqlite ::procedure ::bstring . o)
+	    (generic sqlite-for-each::obj ::%sqlite ::procedure ::bstring . o)
+	    (generic sqlite-run::obj ::%sqlite ::bstring . o)
 	    
 	    (sqlite-table-informations ::%sqlite ::bstring)
 	    (sqlite-table-number-of-rows ::%sqlite ::bstring)
@@ -109,6 +113,50 @@
 (define (%setup-sqltiny! o::sqltiny)
    (with-access::sqltiny o ($builtin path sync)
       (set! $builtin ($sqltiny-open path sync))))
+
+;*---------------------------------------------------------------------*/
+;*    sqlite-config ...                                                */
+;*---------------------------------------------------------------------*/
+(define (sqlite-config . args)
+   (cond-expand
+      ((and bigloo-c (not sqltiny))
+       (for-each (lambda (arg)
+		    (let ((cfg (case arg
+				  ((SQLITE_CONFIG_MULTITHREAD) $SQLITE_CONFIG_MULTITHREAD)
+				  ((SQLITE_CONFIG_SINGLETHREAD) $SQLITE_CONFIG_SINGLETHREAD)
+				  ((SQLITE_CONFIG_MULTITHREAD) $SQLITE_CONFIG_MULTITHREAD)
+				  ((SQLITE_CONFIG_SERIALIZED) $SQLITE_CONFIG_SERIALIZED)
+				  ((SQLITE_CONFIG_MALLOC) $SQLITE_CONFIG_MALLOC)
+				  ((SQLITE_CONFIG_GETMALLOC) $SQLITE_CONFIG_GETMALLOC)
+				  ((SQLITE_CONFIG_SCRATCH) $SQLITE_CONFIG_SCRATCH)
+				  ((SQLITE_CONFIG_PAGECACHE) $SQLITE_CONFIG_PAGECACHE)
+				  ((SQLITE_CONFIG_HEAP) $SQLITE_CONFIG_HEAP)
+				  ((SQLITE_CONFIG_MEMSTATUS) $SQLITE_CONFIG_MEMSTATUS)
+				  ((SQLITE_CONFIG_MUTEX) $SQLITE_CONFIG_MUTEX)
+				  ((SQLITE_CONFIG_GETMUTEX) $SQLITE_CONFIG_GETMUTEX)
+				  ((SQLITE_CONFIG_LOOKASIDE) $SQLITE_CONFIG_LOOKASIDE)
+				  ((SQLITE_CONFIG_PCACHE) $SQLITE_CONFIG_PCACHE)
+				  ((SQLITE_CONFIG_GETPCACHE) $SQLITE_CONFIG_GETPCACHE)
+				  ((SQLITE_CONFIG_LOG) $SQLITE_CONFIG_LOG)
+				  ((SQLITE_CONFIG_URI) $SQLITE_CONFIG_URI)
+				  ((SQLITE_CONFIG_PCACHE2) $SQLITE_CONFIG_PCACHE2)
+				  ((SQLITE_CONFIG_GETPCACHE2) $SQLITE_CONFIG_GETPCACHE2)
+				  ((SQLITE_CONFIG_COVERING_INDEX_SCAN) $SQLITE_CONFIG_COVERING_INDEX_SCAN)
+				  ((SQLITE_CONFIG_SQLLOG) $SQLITE_CONFIG_SQLLOG)
+				  ((SQLITE_CONFIG_MMAP_SIZE) $SQLITE_CONFIG_MMAP_SIZE)
+				  ((SQLITE_CONFIG_WIN32_HEAPSIZE) $SQLITE_CONFIG_WIN32_HEAPSIZE)
+				  ((SQLITE_CONFIG_PCACHE_HDRSZ) $SQLITE_CONFIG_PCACHE_HDRSZ)
+				  ((SQLITE_CONFIG_PMASZ) $SQLITE_CONFIG_PMASZ)
+				  ((SQLITE_CONFIG_STMTJRNL_SPILL) $SQLITE_CONFIG_STMTJRNL_SPILL)
+				  ((SQLITE_CONFIG_SMALL_MALLOC) $SQLITE_CONFIG_SMALL_MALLOC)
+				  ((SQLITE_CONFIG_SORTERREF_SIZE) $SQLITE_CONFIG_SORTERREF_SIZE)
+				  ((SQLITE_CONFIG_MEMDB_MAXSIZE) $SQLITE_CONFIG_MEMDB_MAXSIZE)
+				  
+				  (else (error "sqlite-config" "illegal configuration" arg)))))
+		       ($sqlite-config cfg)))
+	  args))
+      (else
+       #unspecified)))
 
 ;*---------------------------------------------------------------------*/
 ;*    sqlite-close ...                                                 */
@@ -184,6 +232,31 @@
 	     (when exc (raise exc)))))))
 
 ;*---------------------------------------------------------------------*/
+;*    sqlite-get ...                                                   */
+;*---------------------------------------------------------------------*/
+(define-generic (sqlite-get o::%sqlite p::procedure fmt::bstring . args)
+   (with-access::sqltiny o ($builtin)
+      (if (correct-arity? p 2)
+	  (if (null? args)
+	      ($sqltiny-get $builtin p fmt o)
+	      ($sqltiny-get $builtin p (apply sqlite-format fmt args) o))
+	  (error "sqlite-get" "wrong callback arity" p))))
+
+(cond-expand
+   ((and bigloo-c (not sqltiny))
+    (define-method (sqlite-get o::sqlite p::procedure fmt::bstring . args)
+      (if (correct-arity? p 2)
+	  (let* ((exc #f)
+		 (p (sqlite-callback p exc)))
+	     (unwind-protect
+		(with-access::sqlite o ($builtin)
+		   (if (null? args)
+		       ($sqlite-get $builtin p fmt o)
+		       ($sqlite-get $builtin p (apply sqlite-format fmt args) o)))
+		(when exc (raise exc))))
+	  (error "sqlite-get" "wrong callback arity" p)))))
+
+;*---------------------------------------------------------------------*/
 ;*    sqlite-map ...                                                   */
 ;*---------------------------------------------------------------------*/
 (define-generic (sqlite-map o::%sqlite p::procedure fmt::bstring . args)
@@ -205,6 +278,46 @@
 	     (when exc (raise exc)))))))
 
 ;*---------------------------------------------------------------------*/
+;*    sqlite-for-each ...                                              */
+;*---------------------------------------------------------------------*/
+(define-generic (sqlite-for-each o::%sqlite p::procedure fmt::bstring . args)
+   (with-access::sqltiny o ($builtin)
+      (if (correct-arity? p 2)
+	  (if (null? args)
+	      ($sqltiny-for-each $builtin p fmt o)
+	      ($sqltiny-for-each $builtin p (apply sqlite-format fmt args) o))
+	  (error "sqlite-for-each" "wrong callback arity" p))))
+
+(cond-expand
+   ((and bigloo-c (not sqltiny))
+    (define-method (sqlite-for-each o::sqlite p::procedure fmt::bstring . args)
+      (if (correct-arity? p 2)
+	  (let* ((exc #f)
+		 (p (sqlite-callback p exc)))
+	     (unwind-protect
+		(with-access::sqlite o ($builtin)
+		   (if (null? args)
+		       ($sqlite-for-each $builtin p fmt o)
+		       ($sqlite-for-each $builtin p (apply sqlite-format fmt args) o)))
+		(when exc (raise exc)))
+	     (error "sqlite-for-each" "wrong callback arity" p))))))
+
+;*---------------------------------------------------------------------*/
+;*    sqlite-run ...                                                   */
+;*---------------------------------------------------------------------*/
+(define-generic (sqlite-run o::%sqlite fmt::bstring . args)
+   (with-access::sqltiny o ($builtin)
+      (apply sqlite-get o (lambda (x y) #unspecified fmt args))))
+
+(cond-expand
+   ((and bigloo-c (not sqltiny))
+    (define-method (sqlite-run o::sqlite fmt::bstring . args)
+       (with-access::sqlite o ($builtin)
+	  (if (null? args)
+	      ($sqlite-run $builtin fmt o)
+	      ($sqlite-run $builtin (apply sqlite-format fmt args) o))))))
+
+;*---------------------------------------------------------------------*/
 ;*    sqlite-table-informations ...                                    */
 ;*---------------------------------------------------------------------*/
 (define (sqlite-table-informations db name)
@@ -217,7 +330,10 @@
 ;*---------------------------------------------------------------------*/
 (define (sqlite-table-number-of-rows db name)
    (sqlite-eval db
-      (lambda (x) (string->integer x))
+      (lambda (x)
+	 (if (string? x)
+	     (string->integer x)
+	     0))
       (format "SELECT MAX(rowid) FROM ~A" name)))
 
 ;*---------------------------------------------------------------------*/
@@ -265,11 +381,11 @@
 		 (os objs))
 	 (define (next os fmt)
 	    (if (null? os)
-		(error 'sqlite-format "Insufficient number of arguments" fmt)
+		(error "sqlite-format" "Insufficient number of arguments" fmt)
 		(car os)))
 	 (define (print-radix radix num)
 	    (if (not (number? num))
-		(error 'sqlite-format "Illegal number" num)
+		(error "sqlite-format" "Illegal number" num)
 		(display (number->string num radix) p)))
 	 (define (display-sqlite obj p l)
 	    (cond
@@ -340,7 +456,7 @@
 	       ((null? obj)
 		#unspecified)
 	       ((not (pair? obj))
-		(error 'sqlite-format "Illegal list" obj))
+		(error "sqlite-format" "Illegal list" obj))
 	       ((null? (cdr obj))
 		(display (car obj) p))
 	       (else
@@ -353,11 +469,11 @@
 		      ((null? (cdr o))
 		       (display (car o) p))
 		      (else
-		       (error 'sqlite-form "Illegal list" obj)))))))
+		       (error "sqlite-form" "Illegal list" obj)))))))
 	 (define (display-sqlite-quote-list obj p)
 	    (cond
 	       ((not (pair? obj))
-		(error 'sqlite-format "Illegal list" obj))
+		(error "sqlite-format" "Illegal list" obj))
 	       ((null? obj)
 		#unspecified)
 	       ((null? (cdr obj))
@@ -372,12 +488,12 @@
 		      ((null? (cdr o))
 		       (display-sqlite (car o) p 0))
 		      (else
-		       (error 'sqlite-form "Illegal list" obj)))))))
+		       (error "sqlite-form" "Illegal list" obj)))))))
 	 (if (<fx i len)
 	     (let ((c (string-ref fmt i)))
 		(if (char=? c #\~)
 		    (if (=fx i (-fx len 1))
-			(error 'sqlite-format
+			(error "sqlite-format"
 			       "Tag not allowd here"
 			       (substring fmt i len))
 			(let ((f (string-ref fmt (+fx i 1))))
@@ -404,7 +520,7 @@
 			      ((#\c #\C)
 			       (let ((o (next os f)))
 				  (if (not (char? o))
-				      (error sqlite-format "Illegal char" o)
+				      (error "sqlite-format" "Illegal char" o)
 				      (begin
 					 (write-char o p)
 					 (loop (+fx i 2) (cdr os))))))
@@ -427,7 +543,7 @@
 			       (write-char #\~ p)
 			       (loop (+fx i 2) os))
 			      (else
-			       (error 'sqlite-format "Illegal tag" f)))))
+			       (error "sqlite-format" "Illegal tag" f)))))
 		    (begin
 		       (write-char c p)
 		       (loop (+fx i 1) os))))

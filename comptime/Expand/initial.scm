@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Wed Dec 28 15:41:05 1994                          */
-;*    Last change :  Wed Mar 13 06:52:06 2019 (serrano)                */
-;*    Copyright   :  1994-2020 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Sat Feb 11 19:45:39 2023 (serrano)                */
+;*    Copyright   :  1994-2023 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    Initial compiler expanders.                                      */
 ;*=====================================================================*/
@@ -282,7 +282,6 @@
    (install-O-comptime-expander 'if
       (lambda (x::obj e::procedure)
 	 (let ((res (map (lambda (x) (e x e)) x)))
-	    (tprint "if rest=" res)
 	    (match-case res
 	       ((?- ?test #t #f)
 		test)
@@ -555,7 +554,7 @@
 		 ,v)
 	     e))))
 
-   ;; vector-for-each
+   ;; vector-for-each, vector-map
    (install-O-comptime-expander 'vector-for-each expand-vector-for-each)
    (install-O-comptime-expander 'vector-map expand-vector-map)
    (install-O-comptime-expander 'vector-map! expand-vector-map!)

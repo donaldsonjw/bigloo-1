@@ -3,12 +3,12 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Nov 26 08:17:46 2010                          */
-;*    Last change :  Wed Jun 16 15:59:33 2021 (serrano)                */
-;*    Copyright   :  2010-21 Manuel Serrano                            */
+;*    Last change :  Wed Jul 12 16:13:30 2023 (serrano)                */
+;*    Copyright   :  2010-23 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    Compute type variable references according to dataflow tests.    */
 ;*    For instance, for an expression such as (if (pair? x) then else),*/
-;*    propagate x::pair in the the branch.                             */
+;*    propagate x::pair in the then branch.                            */
 ;*=====================================================================*/
 
 ;*---------------------------------------------------------------------*/
@@ -74,7 +74,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    This function sets the most specific type for the variable       */
 ;*    reference (computed according to the control flow). The          */
-;*    stage globalize and integrate that introduce cells change        */
+;*    stages GLOBALIZE and INTEGRATE that introduce cells, change      */
 ;*    the types of the boxed variable references (see globalize_node   */
 ;*    and integrate_node).                                             */
 ;*---------------------------------------------------------------------*/
@@ -171,7 +171,8 @@
 		(let ((typ (get-type value #t)))
 		   (if (or (eq? typ *_*) (eq? typ *obj*))
 		       (remove-variable-from-env variable nenv)
-		       (cons (cons variable typ) nenv))))))))
+		       (cons (cons variable typ)
+			  (remove-variable-from-env variable nenv)))))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    dataflow-node! ::conditional ...                                 */
@@ -237,7 +238,7 @@
 ;*---------------------------------------------------------------------*/
 (define-method (dataflow-node! node::let-var env)
    (set! let-var-stamp (+fx 1 let-var-stamp))
-   (with-access::let-var node (body bindings)
+   (with-access::let-var node (body bindings removable?)
       (let* ((stamp let-var-stamp)
 	     (env (let loop ((bindings bindings)
 			     (env env))

@@ -6,6 +6,11 @@ import java.util.*;
 import java.lang.Runtime;
 import java.net.*;
 import java.util.regex.*;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+
+
 
 public final class foreign
 {
@@ -51,6 +56,9 @@ public final class foreign
    /////
    // INTERNAL
    /////
+   public static void GC_gcollect() {
+   }
+   
    public static void print(String msg)
       {
 	 System.out.println(msg);
@@ -1260,9 +1268,9 @@ public final class foreign
    public static Object SAFE_MINUS_FX(int n1, int n2)
       {
 	 int x = n1 - n2;
-	 if (Integer_signum(n1) == Integer_signum(n2) &&
+	 if (Integer_signum(n1) != Integer_signum(n2) &&
 	     Integer_signum(n1) != Integer_signum(x) &&
-	     Integer_signum(x) != 0)
+             Integer_signum(n1) != 0)
 	    return MINUS_BIGNUM(new bignum(n1), new bignum(n2));
 	 else
 	    return new bint(x);
@@ -1271,9 +1279,9 @@ public final class foreign
    public static Object SAFE_MINUS_ELONG(long n1, long n2)
       {
 	 long x = n1 - n2;
-	 if (Long_signum(n1) == Long_signum(n2) &&
+	 if (Long_signum(n1) != Long_signum(n2) &&
 	     Long_signum(n1) != Long_signum(x) &&
-	     Long_signum(x) != 0)
+             Long_signum(n1) != 0)
 	    return MINUS_BIGNUM(new bignum(n1), new bignum(n2));
 	 else
 	    return new belong(x);
@@ -1282,14 +1290,15 @@ public final class foreign
    public static Object SAFE_MINUS_LLONG(long n1, long n2)
       {
 	 long x = n1 - n2;
-	 if (Long_signum(n1) == Long_signum(n2) &&
+	 if (Long_signum(n1) != Long_signum(n2) &&
 	     Long_signum(n1) != Long_signum(x) &&
-	     Long_signum(x) != 0)
+             Long_signum(n1) != 0)
 	    return MINUS_BIGNUM(new bignum(n1), new bignum(n2));
 	 else
 	    return new bllong(x);
       }
 
+    
    public static int MUL_FX(int n1, int n2)
       {
 	 return (n1 * n2);
@@ -3562,7 +3571,6 @@ public final class foreign
 
    public static date bgl_seconds_to_gmtdate(long sec)
       {
-	 System.out.println( "bgl_seconds_to_gmtdate not implemented using local time" );
 	 return bgl_seconds_to_date( sec );
       }
 
@@ -4165,106 +4173,55 @@ public final class foreign
    
    public static void BGL_SU8VECTOR_COPY(u8vector t, int ts, u8vector s, int ss, int se ) {
       int len = se - ss;
-      boolean forward = true;
-      if (t == s) {
-          forward = !((ss < ts) && (ts < (ss + len)));
-      }
-      if (forward) {
-          for( int i = 0; i < len; i++ ) {
-              t.objs[ ts + i ] = s.objs[ ss + i ];
-          }
-      } else {
-          for( int i = len-1; i >= 0; i-- ) {
-              t.objs[ ts + i ] = s.objs[ ss + i ];
-          }
-      }
+      System.arraycopy(s.objs, ss, t.objs, ts, len);
    }
+
+   public static void BGL_SU8VECTOR_COPY(s8vector t, int ts, s8vector s, int ss, int se ) {
+      int len = se - ss;
+      System.arraycopy(s.objs, ss, t.objs, ts, len);
+   }
+ 
    
    public static void BGL_SU16VECTOR_COPY(u16vector t, int ts, u16vector s, int ss, int se ) {
       int len = se - ss;
-       boolean forward = true;
-      if (t == s) {
-          forward = !((ss < ts) && (ts < (ss + len)));
-      }
-      if (forward) {
-          for( int i = 0; i < len; i++ ) {
-              t.objs[ ts + i ] = s.objs[ ss + i ];
-          }
-      } else {
-          for( int i = len-1; i >= 0; i-- ) {
-              t.objs[ ts + i ] = s.objs[ ss + i ];
-          }
-      }
+      System.arraycopy(s.objs, ss, t.objs, ts, len);
    }
-   
+
+   public static void BGL_SU16VECTOR_COPY(s16vector t, int ts, s16vector s, int ss, int se ) {
+      int len = se - ss;
+      System.arraycopy(s.objs, ss, t.objs, ts, len);
+   }
+ 
    public static void BGL_SU32VECTOR_COPY(u32vector t, int ts, u32vector s, int ss, int se ) {
       int len = se - ss;
-       boolean forward = true;
-      if (t == s) {
-          forward = !((ss < ts) && (ts < (ss + len)));
-      }
-      if (forward) {
-          for( int i = 0; i < len; i++ ) {
-              t.objs[ ts + i ] = s.objs[ ss + i ];
-          }
-      } else {
-          for( int i = len-1; i >= 0; i-- ) {
-              t.objs[ ts + i ] = s.objs[ ss + i ];
-          }
-      }
+      System.arraycopy(s.objs, ss, t.objs, ts, len);
    }
-   
+
+   public static void BGL_SU32VECTOR_COPY(s32vector t, int ts, s32vector s, int ss, int se ) {
+      int len = se - ss;
+      System.arraycopy(s.objs, ss, t.objs, ts, len);  
+   }
+  
    public static void BGL_SU64VECTOR_COPY(u64vector t, int ts, u64vector s, int ss, int se ) {
       int len = se - ss;
-       boolean forward = true;
-      if (t == s) {
-          forward = !((ss < ts) && (ts < (ss + len)));
-      }
-      if (forward) {
-          for( int i = 0; i < len; i++ ) {
-              t.objs[ ts + i ] = s.objs[ ss + i ];
-          }
-      } else {
-          for( int i = len-1; i >= 0; i-- ) {
-              t.objs[ ts + i ] = s.objs[ ss + i ];
-          }
-      }
+      System.arraycopy(s.objs, ss, t.objs, ts, len);
    }
-   
-   public static void BGL_F32VECTOR_COPY(u32vector t, int ts, u32vector s, int ss, int se ) {
+
+   public static void BGL_SU64VECTOR_COPY(s64vector t, int ts, s64vector s, int ss, int se ) {
       int len = se - ss;
-       boolean forward = true;
-      if (t == s) {
-          forward = !((ss < ts) && (ts < (ss + len)));
-      }
-      if (forward) {
-          for( int i = 0; i < len; i++ ) {
-              t.objs[ ts + i ] = s.objs[ ss + i ];
-          }
-      } else {
-          for( int i = len-1; i >= 0; i-- ) {
-              t.objs[ ts + i ] = s.objs[ ss + i ];
-          }
-      }
+      System.arraycopy(s.objs, ss, t.objs, ts, len);
    }
-   
-   public static void BGL_F64VECTOR_COPY(u64vector t, int ts, u64vector s, int ss, int se ) {
+    
+   public static void BGL_F32VECTOR_COPY(f32vector t, int ts, f32vector s, int ss, int se ) {
       int len = se - ss;
-       boolean forward = true;
-      if (t == s) {
-          forward = !((ss < ts) && (ts < (ss + len)));
-      }
-      if (forward) {
-          for( int i = 0; i < len; i++ ) {
-              t.objs[ ts + i ] = s.objs[ ss + i ];
-          }
-      } else {
-          for( int i = len-1; i >= 0; i-- ) {
-              t.objs[ ts + i ] = s.objs[ ss + i ];
-          }
-      }
+      System.arraycopy(s.objs, ss, t.objs, ts, len);
    }
    
+   public static void BGL_F64VECTOR_COPY(f64vector t, int ts, f64vector s, int ss, int se ) {
+      int len = se - ss;
+      System.arraycopy(s.objs, ss, t.objs, ts, len);
+   }
+    
    //////
    // TVECTOR
    //////
@@ -4341,14 +4298,18 @@ public final class foreign
       return p.getRef();
    }
 
-   public static void bgl_weakptr_data_set(weakptr p, Object o){
-      p.setData(o);
-   }
-
    public static void bgl_weakptr_ref_set(weakptr p, Object o){
       p.setRef(o);
    }
 
+   public static Object bgl_weakptr_data(weakptr p) {
+      return p.getData();
+   }
+
+   public static void bgl_weakptr_data_set(weakptr p, Object o){
+      p.setData(o);
+   }
+   
    public static weakptr bgl_make_weakptr(Object o, Object r){
       return new weakptr(o, r);
    }
@@ -4415,8 +4376,8 @@ public final class foreign
 
    public static int OBJECT_TYPE = 0;
 
-   public static Object BGL_AS_OBJECT(Object o) {
-      return o;
+   public static bigloo.object BGL_AS_OBJECT(Object o) {
+      return (bigloo.object)o;
    }
    
    public static Object BGL_OBJECT_WIDENING_SET(object o, Object v)
@@ -5105,7 +5066,7 @@ public final class foreign
       throw v;
    }
 
-   private static Boolean err_lock = new Boolean( true );
+   private static Lock err_lock = new ReentrantLock();
 
    public static void notify_exception( Throwable e ) throws Throwable {
       if( e instanceof ClassCastException ) {
@@ -5146,10 +5107,13 @@ public final class foreign
    public static Object java_exception_handler(Throwable v, exit tag) {
       if( v instanceof java.lang.StackOverflowError ) {
 	 // abort at once because otherwise the handler will crash too!
-	 synchronized( err_lock ) {
+          err_lock.lock();
+          try {
 	    System.err.println( "*** JVM stack overflow error:" );
 	    v.printStackTrace( new stackwriter( System.err, true ) );
-	 }
+          } finally {
+              err_lock.unlock();
+          }
       } else {
 	 try {
 	    notify_exception( v );
@@ -5233,12 +5197,15 @@ public final class foreign
 	 notify_exception( e );
       } catch( Throwable _t ) {
       } finally {
-	 synchronized( err_lock ) {
+         err_lock.lock();
+	 try {
 	    final stackwriter sw = new stackwriter( System.err, true );
 	    System.err.println();
 	    e.printStackTrace( sw );
 	    sw.flush();
-	 }
+	 } finally {
+            err_lock.unlock();
+         }
       }
 	 
       bigloo_abort();
@@ -5360,7 +5327,7 @@ public final class foreign
 	 return stack_trace.get(depth);
       }
 
-   public static Object init_trace_stacksp()
+   public static Object init_trace_stacksp(bgldynamic env)
       {
 	 return unspecified.unspecified;
       }
@@ -5561,6 +5528,16 @@ public final class foreign
 	 }
       }
 
+   public static int bgl_directory_length(byte[] name) 
+      {
+	 if( is_resourcep( name ) ) {
+	    return bigloo.input_resource_port.bgl_directory_length( resource_name( name ) );
+	 } else {
+	    final String[] files = (new File(new String(name))).list();
+	    return files.length;
+	 }
+      }
+      
    public static Object bgl_directory_to_list(byte[]name)
       {
 	 if( is_resourcep( name ) ) {
@@ -5577,6 +5554,25 @@ public final class foreign
 	    }
 	 
 	    return result;
+	 }
+      }
+
+   public static Object bgl_directory_to_vector(byte[]name)
+      {
+	 if( is_resourcep( name ) ) {
+	    return bigloo.input_resource_port.bgl_directory_to_vector( resource_name( name ) );
+	 } else {
+	    final String[] files = (new File(new String(name))).list();            
+	    if (files != null) {
+	       final int file_count = files.length;
+               Object[] result = make_vector(file_count, bigloo.foreign.BUNSPEC);
+               
+	       for (int i = 0; i < file_count; ++i)
+                  result[i] = files[i].getBytes();
+               return result;
+	    } else {
+	       return make_vector0();  
+            }
 	 }
       }
 
@@ -5953,7 +5949,8 @@ public final class foreign
 						int port,
 						int timeo,
 						byte[] inbuf,
-						byte[] outbuf )
+						byte[] outbuf,
+                                                symbol family)
       {
 	 return new client_socket(hostname, port, inbuf, outbuf );
       }
@@ -5961,7 +5958,7 @@ public final class foreign
    public static socket bgl_make_server_socket(Object name,
 					       int port,
 					       int backlog,
-					       boolean ipv6)
+					       symbol family)
       {
 	 return new server_socket(name, port);
       }
@@ -6074,12 +6071,14 @@ public final class foreign
 
    public static datagram_socket bgl_make_datagram_client_socket( byte[] hostname,
 								  int port,
-								  boolean bcast ) {
-      return new datagram_client_socket( hostname, port, bcast );
+								  boolean bcast,
+                                                                  symbol family ) {
+       return new datagram_client_socket( hostname, port, bcast, family );
    }
 
-   public static datagram_socket bgl_make_datagram_server_socket( int port ) {
-      return new datagram_server_socket( port );
+   public static datagram_socket bgl_make_datagram_server_socket( int port,
+                                                                  symbol family ) {
+       return new datagram_server_socket( port, family );
    }
 
    public static datagram_socket bgl_make_datagram_unbound_socket( symbol family ) {
@@ -6300,6 +6299,11 @@ public final class foreign
 	 }
       }
 
+   public static Object bgl_open_input_descriptor(int fd, byte[] b)
+      {
+	 return BFALSE;
+      }
+
    public static Object bgl_open_input_pipe(byte[]s, byte[] b)
       {
 	 return new input_pipe_port(new String(s), b);
@@ -6329,6 +6333,16 @@ public final class foreign
    public static input_port bgl_open_input_substring_bang(byte[]s, int start, int end)
       {
 	 return new input_string_port( s, start, end, true );
+      }
+
+   public static Object bgl_open_input_mmap(mmap mm, byte[] b, int start, int end)
+      {
+	 return BFALSE;
+      }
+    
+   public static boolean INPUT_MMAP_PORTP(Object o)
+      {
+	 return false;
       }
 
    public static Object bgl_open_input_procedure(procedure p, byte[] b)
@@ -6592,7 +6606,7 @@ public final class foreign
    
    public static boolean rgc_buffer_eof_p(input_port p)
       {
-	 return ((p.buffer.length == p.forward) && (p.forward == p.bufpos));
+         return p.eof && (p.matchstop == p.bufpos);
       }
 
    public static boolean rgc_buffer_eof2_p(input_port p, int forward, int bufpos)
@@ -6706,8 +6720,10 @@ public final class foreign
       } catch( Exception e ) {
 	 String msg = e.getMessage();
 
-	 final stackwriter sw = new stackwriter( System.out, true );
-	 e.printStackTrace( sw );
+         // Commenting out the following stack trace printing to reduce noisy and confusing
+         // ouput. If debugging problems, uncomment.
+	 // final stackwriter sw = new stackwriter( System.out, true );
+	 // e.printStackTrace( sw );
 	 
 	 bigloo.runtime.Llib.error.bgl_system_failure(
 	    (e instanceof java.net.SocketTimeoutException ?

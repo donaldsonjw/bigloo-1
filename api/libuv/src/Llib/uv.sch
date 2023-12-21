@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue May  6 11:57:14 2014                          */
-;*    Last change :  Tue Oct 23 11:49:02 2018 (serrano)                */
-;*    Copyright   :  2014-18 Manuel Serrano                            */
+;*    Last change :  Tue May  9 09:57:17 2023 (serrano)                */
+;*    Copyright   :  2014-23 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    LIBUV C bindings                                                 */
 ;*    -------------------------------------------------------------    */
@@ -36,6 +36,8 @@
 
       (macro $uv-version::string () "(char *)uv_version_string")
 
+      ($bgl-uv-init::void () "bgl_uv_init")
+      
       ;; uv-state
       (type $uv_stat_t void* "uv_stat_t *")
       (macro $uv-stat-nil::$uv_stat_t "0L")
@@ -54,6 +56,7 @@
       (macro $uv-handle-has-ref?::bool (::$uv_handle_t) "uv_has_ref")
       (macro $uv-handle-close::void (::$uv_handle_t ::$uv_close_cb) "uv_close")
       (macro $uv-handle-active?::bool (::$uv_handle_t) "uv_is_active")
+      ($bgl-uv-stream-close::void (::UvStream ::obj) "bgl_uv_stream_close")
       
       ($bgl_uv_close_cb::$uv_close_cb (::$uv_handle_t) "bgl_uv_close_cb")
       (macro $BGL_UV_CLOSE_CB::$uv_close_cb "(uv_close_cb)&bgl_uv_close_cb")
@@ -64,9 +67,13 @@
       
       (macro $uv_loop_nil::$uv_loop_t "0L")
       (macro $uv_loop_nilp::bool (::$uv_loop_t) "((uv_loop_t *)0L) == ")
-      
+
       (macro $uv_loop_new::$uv_loop_t () "uv_loop_new")
+      ($uv_loop_init::void (::obj) "bgl_uv_loop_init")
+      
       (macro $uv_default_loop::$uv_loop_t () "uv_default_loop")
+      (macro $uv-loop-data-set!::obj (::$uv_loop_t ::obj) "BGL_UV_LOOP_DATA_SET")
+      (macro $uv-loop-data-get::obj (::$uv_loop_t) "BGL_UV_LOOP_DATA_GET")
       
       (macro $uv-run::int (::$uv_loop_t ::int) "uv_run")
       (macro $uv-stop::void (::$uv_loop_t) "uv_stop")
@@ -145,8 +152,8 @@
       (macro $uv_timer_nil::$uv_timer_t "0L")
       
       ($bgl_uv_timer_new::$uv_timer_t (::UvTimer ::UvLoop) "bgl_uv_timer_new")
-      (macro $uv_timer_start::void (::$uv_timer_t ::$uv_timer_cb ::uint64 ::uint64) "uv_timer_start")
-      (macro $uv_timer_stop::void (::$uv_timer_t) "uv_timer_stop")
+      ($uv_timer_start::void (::obj ::obj ::uint64 ::uint64) "bgl_uv_timer_start")
+      ($uv_timer_stop::void (::obj) "bgl_uv_timer_stop")
       
       ($bgl_uv_timer_cb::$uv_timer_cb (::$uv_timer_t) "bgl_uv_timer_cb")
       (macro $BGL_UV_TIMER_CB::$uv_timer_cb "(uv_timer_cb)&bgl_uv_timer_cb")
@@ -161,11 +168,10 @@
       (macro $uv_idle_nil::$uv_idle_t "0L")
       
       ($bgl_uv_idle_new::$uv_idle_t (::UvIdle ::UvLoop) "bgl_uv_idle_new")
-      (macro $uv_idle_start::void (::$uv_idle_t ::$uv_idle_cb) "uv_idle_start")
-      (macro $uv_idle_stop::void (::$uv_idle_t) "uv_idle_stop")
+      ($uv_idle_start::int (::obj ::obj) "bgl_uv_idle_start")
+      ($uv_idle_stop::int (::obj) "bgl_uv_idle_stop")
       
       ($bgl_uv_idle_cb::$uv_idle_cb (::$uv_idle_t ::int) "bgl_uv_handle_cb")
-      (macro $BGL_UV_IDLE_CB::$uv_idle_cb "(uv_idle_cb)&bgl_uv_handle_cb")
       
       ;; check
       (type $uv_check_t void* "uv_check_t *")
@@ -215,13 +221,19 @@
 	 "bgl_uv_fs_fchmod")
       ($uv-fs-open::obj (::bstring ::int ::int ::obj ::UvLoop)
 	 "bgl_uv_fs_open")
+      ($uv-fs-open4::obj (::bstring ::int ::int ::obj ::obj ::obj ::obj ::obj ::UvLoop)
+	 "bgl_uv_fs_open4")
       ($uv-fs-close::int (::UvFile ::obj ::UvLoop)
 	 "bgl_uv_fs_close")
-      ($uv-fs-fstat::obj (::UvFile ::obj ::UvLoop)
+      ($uv-fs-close2::int (::UvFile ::obj ::obj ::obj ::UvLoop)
+	 "bgl_uv_fs_close2")
+      ($uv-fs-copyfile::int (::bstring ::bstring ::int ::obj ::UvLoop)
+	 "bgl_uv_fs_copyfile")
+      ($uv-fs-fstat::obj (::UvFile ::obj ::obj ::UvLoop)
 	 "bgl_uv_fs_fstat")
-      ($uv-fs-lstat::obj (::string ::obj ::UvLoop)
+      ($uv-fs-lstat::obj (::string ::obj ::obj ::UvLoop)
 	 "bgl_uv_fs_lstat")
-      ($uv-fs-stat::obj (::string ::obj ::UvLoop)
+      ($uv-fs-stat::obj (::string ::obj ::obj ::UvLoop)
 	 "bgl_uv_fs_stat")
       ($uv-fs-link::int (::string ::string ::obj ::UvLoop)
 	 "bgl_uv_fs_link")
@@ -245,8 +257,16 @@
 	 "bgl_uv_fs_utime")
       ($uv-fs-write::int (::UvFile ::bstring ::long ::long ::int64 ::obj ::UvLoop)
 	 "bgl_uv_fs_write")
+      ($uv-fs-write2::int (::UvFile ::bstring ::long ::long ::int64 ::obj ::obj ::obj ::UvLoop)
+	 "bgl_uv_fs_write2")
+      ($uv-fs-write3::int (::UvFile ::bstring ::long ::long ::int64 ::obj ::obj ::obj ::obj ::UvLoop)
+	 "bgl_uv_fs_write3")
       ($uv-fs-read::int (::UvFile ::bstring ::long ::long ::int64 ::obj ::UvLoop)
 	 "bgl_uv_fs_read")
+      ($uv-fs-read2::int (::UvFile ::bstring ::long ::long ::int64 ::obj ::obj ::obj ::UvLoop)
+	 "bgl_uv_fs_read2")
+      ($uv-fs-read3::int (::UvFile ::bstring ::long ::long ::int64 ::obj ::obj ::obj ::obj ::UvLoop)
+	 "bgl_uv_fs_read3")
       (macro $uv-guess-handle::int (::int)
 	     "uv_guess_handle")
       
@@ -301,17 +321,19 @@
       
       (infix macro $uv-stream-write-queue-size::long (::$uv_stream_t) "->write_queue_size")
       (infix macro $uv-stream-fd::long (::$uv_stream_t) "->io_watcher.fd")
-      ($uv-write::int (::UvHandle ::string ::long ::long ::procedure ::UvLoop)
+      ($uv-write::int (::UvHandle ::string ::long ::long ::procedure
+			 ::obj ::obj ::obj ::obj ::obj)
 	 "bgl_uv_write")
-      ($uv-write2::int (::UvHandle ::string ::long ::long ::obj ::procedure ::UvLoop)
+      ($uv-write2::int (::UvHandle ::string ::long ::long ::obj ::procedure
+			  ::obj ::obj ::obj ::obj ::obj)
 	 "bgl_uv_write2")
-      ($uv-read-start::int (::UvHandle ::procedure ::procedure ::UvLoop)
+      ($uv-read-start::int (::UvHandle ::procedure ::procedure)
 	 "bgl_uv_read_start")
-      ($uv-read-stop::int (::$uv_stream_t)
-	 "uv_read_stop")
-      ($uv-shutdown::int (::UvStream ::obj ::UvLoop)
+      ($uv-read-stop::int (::UvHandle)
+	 "bgl_uv_read_stop")
+      ($uv-shutdown::int (::UvStream ::obj)
 	 "bgl_uv_shutdown")
-      ($uv-listen::int (::UvStream ::int ::obj ::UvLoop)
+      ($uv-listen::int (::UvStream ::int ::obj)
 	 "bgl_uv_listen")
       (macro $uv-accept::int (::$uv_stream_t ::$uv_stream_t)
 	     "uv_accept")
@@ -377,10 +399,10 @@
 	 "bgl_uv_udp_create")
       ($uv-udp-bind::int (::$uv_udp_t ::string ::int ::int ::int)
 	 "bgl_uv_udp_bind")
-      ($uv-udp-recv-start::int (::UvHandle ::procedure ::procedure ::UvLoop)
+      ($uv-udp-recv-start::int (::UvHandle ::procedure ::procedure)
 	 "bgl_uv_udp_recv_start")
-      (macro $uv-udp-recv-stop::int (::$uv_udp_t)
-	     "uv_udp_recv_stop")
+      ($uv-udp-recv-stop::int (::UvHandle)
+	 "bgl_uv_udp_recv_stop")
       
       ($uv-udp-send::int (::$uv_udp_t ::bstring ::long ::long ::long ::string ::int ::obj ::UvLoop)
 	 "bgl_uv_udp_send")

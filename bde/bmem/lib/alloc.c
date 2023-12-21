@@ -1,10 +1,10 @@
 /*=====================================================================*/
-/*    serrano/prgm/project/bigloo/bigloo/bde/bmem-ng/lib/alloc.c       */
+/*    serrano/prgm/project/bigloo/bigloo/bde/bmem/lib/alloc.c          */
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Sun Apr 13 06:42:57 2003                          */
-/*    Last change :  Fri Nov  5 09:15:25 2021 (serrano)                */
-/*    Copyright   :  2003-21 Manuel Serrano                            */
+/*    Last change :  Fri Jun 16 15:14:07 2023 (serrano)                */
+/*    Copyright   :  2003-23 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Allocation replacement routines                                  */
 /*=====================================================================*/
@@ -28,10 +28,11 @@
 static hashtable_t *native_allocators = 0L;
 static hashtable_t *file_allocs = 0L;
 
-static long alloc_size = 0;
+static long long alloc_size = 0;
 
 extern void gc_alloc_size_add(int size);
 extern long gc_alloc_size();
+extern unsigned long gc_number;
 
 static long alloc_typenum = -1;
 
@@ -41,7 +42,7 @@ static long alloc_typenum = -1;
 /*---------------------------------------------------------------------*/
 long
 bmem_get_alloc_type() {
-   if(bmem_thread) {
+   if (bmem_thread) {
       return (long)____pthread_getspecific(bmem_key);
    } else {
       return alloc_typenum;
@@ -54,7 +55,7 @@ bmem_get_alloc_type() {
 /*---------------------------------------------------------------------*/
 void
 bmem_set_alloc_type(long tnum) {
-   if( bmem_thread ) {
+   if (bmem_thread) {
       ____pthread_setspecific(bmem_key, (void *)tnum);
    } else {
       alloc_typenum = tnum;
@@ -242,12 +243,14 @@ linecountcmp(const void *p1, const void *p2) {
 /*---------------------------------------------------------------------*/
 static void
 file_dump_typenums(file_alloc_t *file, long i) {
+   long j;
+   
    if (file->lines[i].typecount >= 1) {
       if (file->lines[i].typenums[0] >= 0) {
 	 fprintf(stderr, "%s", all_types[file->lines[i].typenums[0]].name);
       }
    }
-   for (int j = file->lines[i].typecount - 1; j >= 1; j--) {
+   for (j = file->lines[i].typecount - 1; j >= 1; j--) {
       if (file->lines[i].typenums[j] >= 0) {
 	 fprintf(stderr, ", %s", all_types[file->lines[i].typenums[j]].name);
       }
@@ -262,8 +265,9 @@ void
 file_dump_alloc_size(const char *filename, void *data) {
    file_alloc_t *file = (file_alloc_t *)data;
    int show = 0;
+   long i;
 
-   for (long i = 0; i < file->size && !show; i++) {
+   for (i = 0; i < file->size && !show; i++) {
       if (file->lines[i].size > DUMP_LINE_SIZE_THRESHOLD) show = 1;
    }
 
@@ -275,9 +279,9 @@ file_dump_alloc_size(const char *filename, void *data) {
       }
       qsort(file->lines, file->size, sizeof(line_alloc_t), linesizecmp);
 
-      for (long i = 0; i < file->size; i++) {
+      for (i = 0; i < file->size; i++) {
 	 if (file->lines[i].size > DUMP_LINE_SIZE_THRESHOLD) {
-	    fprintf(stderr, "   %6d: %8.2fMB %5.2f%% [%8ld] (", file->lines[i].lineno,
+	    fprintf(stderr, "   %6ld: %8.2fMB %5.2f%% [%8ld] (", file->lines[i].lineno,
 		    (double)(file->lines[i].size) / (1024. * 1024.),
 		    ((double)(file->lines[i].size) * 100) / alloc_size,
 		    file->lines[i].count);
@@ -296,8 +300,9 @@ void
 file_dump_alloc_count(const char *filename, void *data) {
    file_alloc_t *file = (file_alloc_t *)data;
    int show = 0;
+   long i;
 
-   for (long i = 0; i < file->size && !show; i++) {
+   for (i = 0; i < file->size && !show; i++) {
       if (file->lines[i].count > DUMP_LINE_COUNT_THRESHOLD) show = 1;
    }
 
@@ -305,9 +310,9 @@ file_dump_alloc_count(const char *filename, void *data) {
       fprintf(stderr, "%s:\n", file->filename);
       qsort(file->lines, file->size, sizeof(line_alloc_t), linecountcmp);
 
-      for (long i = 0; i < file->size; i++) {
+      for (i = 0; i < file->size; i++) {
 	 if (file->lines[i].size > DUMP_LINE_COUNT_THRESHOLD) {
-	    fprintf(stderr, "   %6d: %8ld (", file->lines[i].lineno,
+	    fprintf(stderr, "   %6ld: %8ld (", file->lines[i].lineno,
 		    file->lines[i].count);
 	    file_dump_typenums(file, i);
 	    fprintf(stderr, ")\n");
@@ -323,10 +328,11 @@ file_dump_alloc_count(const char *filename, void *data) {
 void
 dump_types_cnt() {
    long sum;
+   long i;
 
    qsort(all_types, types_number, sizeof(struct type), typecmp);
    
-   for (long i = 0; i < types_number; i++) {
+   for (i = 0; i < types_number; i++) {
       sum += all_types[i].cnt;
    }
 
@@ -337,7 +343,7 @@ dump_types_cnt() {
       fprintf(stderr, "types: %ld\n", sum);
    }
 
-   for (long i = 0; i < types_number; i++) {
+   for (i = 0; i < types_number; i++) {
       if ((all_types[i].cnt * 100 / sum) >= 1 ||
 	  ((double)(all_types[i].size)) / (1024. * 1024.) >= 1) {
 	 fprintf(stderr, "   %-20s: %8.2fMB %5.2f%% [%8ld]\n",
@@ -357,16 +363,14 @@ void
 alloc_dump_statistics() {
    fprintf(stderr, "\n\n===================================================\n");
    if (bmem_color) {
-      fprintf(stderr, "[0m[1;32mallocation size:[0m %.2fMB\n\n", (double)alloc_size / (1024. * 1024.));
+      fprintf(stderr, "[0m[1;32mallocation size:[0m %.2fMB\n", (double)alloc_size / (1024. * 1024.));
    } else {
-      fprintf(stderr, "allocation size: %.2fMB\n\n", (double)alloc_size / (1024. * 1024.));
+      fprintf(stderr, "allocation size: %.2fMB\n", (double)alloc_size / (1024. * 1024.));
    }
+   fprintf(stderr, "gc count: %lu\n\n", gc_number);
    hashtable_foreach(file_allocs, file_dump_alloc_size);
 
    dump_types_cnt();
-/*                                                                     */
-/*    fprintf(stderr, "\n\n\nallocation count: %l\n\n", 0);            */
-/*    hashtable_foreach(file_allocs, file_dump_alloc_count);           */
 }
 
 /*---------------------------------------------------------------------*/
@@ -374,11 +378,11 @@ alloc_dump_statistics() {
 /*    alloc_dump_type ...                                              */
 /*---------------------------------------------------------------------*/
 void
-alloc_dump_type( pa_pair_t *i, FILE *f ) {
-   type_alloc_info_t *tai = (type_alloc_info_t *)PA_CDR( i );
+alloc_dump_type(pa_pair_t *i, FILE *f) {
+   type_alloc_info_t *tai = (type_alloc_info_t *)PA_CDR(i);
    
-   fprintf( f, "\n          (%ld #l%ld #l%ld)", (long)PA_CAR( i ),
-	    tai->num, BMEMSIZE( tai->size ) );
+   fprintf(f, "\n          (%ld #l%ld #l%ld)", (long)PA_CAR(i),
+	    tai->num, BMEMSIZE(tai->size));
 }
 
 /*---------------------------------------------------------------------*/
@@ -413,20 +417,22 @@ GC_malloc_untracked(obj_t o, size_t lb) {
 /*---------------------------------------------------------------------*/
 static obj_t
 trace_alloc(obj_t o, size_t lb) {
-   alloc_info_t info = { typenum: bmem_get_alloc_type(),
-      size: lb,
-      function: 0L,
-      filename: 0L,
-      lineno: -1,
-      depth: SEARCH_TYPE_STACK_DEPTH
+   alloc_info_t info = { /* typenum: */ bmem_get_alloc_type(),
+      /* size: */ lb,
+      /* function: */ 0L,
+      /* filename: */ 0L,
+      /* lineno: */ -1,
+      /* depth: */ SEARCH_TYPE_STACK_DEPTH
    };
    
    gc_alloc_size_add(lb);
    alloc_size += lb;
 
+#if BGL_HAVE_BACKTRACE
    if (bmem_backtrace == 0 || bmem_backtrace == info.typenum) {
       backtrace_for_each(backtrace_alloc_cb, 1, &info);
    }
+#endif      
 
    if (info.typenum == IGNORE_TYPE_NUM) {
       return o;
@@ -439,7 +445,7 @@ trace_alloc(obj_t o, size_t lb) {
    all_types[info.typenum].cnt++;
    all_types[info.typenum].size += lb;
    
-   if (info.filename && info.lineno >= 0 ) {
+   if (info.filename && info.lineno >= 0) {
       file_alloc_add(info.filename, info.lineno, lb, info.typenum);
 
       if (info.typenum == NO_TYPE_NUM ||
@@ -478,7 +484,7 @@ GC_malloc(size_t lb) {
 /*    GC_realloc ...                                                   */
 /*---------------------------------------------------------------------*/
 obj_t
-GC_realloc( obj_t old, size_t lb ) {
+GC_realloc(obj_t old, size_t lb) {
    return trace_alloc(____GC_realloc(old,lb), lb);
 }
 
@@ -487,7 +493,7 @@ GC_realloc( obj_t old, size_t lb ) {
 /*    GC_malloc_atomic ...                                             */
 /*---------------------------------------------------------------------*/
 obj_t
-GC_malloc_atomic( size_t lb ) {
+GC_malloc_atomic(size_t lb) {
    return trace_alloc(____GC_malloc_atomic(lb), lb);
 }
 
@@ -496,7 +502,7 @@ GC_malloc_atomic( size_t lb ) {
 /*    GC_malloc_uncollectable ...                                      */
 /*---------------------------------------------------------------------*/
 obj_t
-GC_malloc_uncollectable( size_t lb ) {
+GC_malloc_uncollectable(size_t lb) {
    return trace_alloc(____GC_malloc_uncollectable(lb), lb);
 }
 
@@ -509,8 +515,8 @@ GC_malloc_uncollectable( size_t lb ) {
 /*    multithreaded environment.                                       */
 /*---------------------------------------------------------------------*/
 obj_t
-GC_local_malloc( size_t lb ) {
-   return GC_malloc( lb );
+GC_local_malloc(size_t lb) {
+   return GC_malloc(lb);
 }
 
 /*---------------------------------------------------------------------*/
@@ -518,6 +524,6 @@ GC_local_malloc( size_t lb ) {
 /*    GC_local_malloc_atomic ...                                       */
 /*---------------------------------------------------------------------*/
 obj_t
-GC_local_malloc_atomic( size_t lb ) {
-   return GC_malloc_atomic( lb );
+GC_local_malloc_atomic(size_t lb) {
+   return GC_malloc_atomic(lb);
 }

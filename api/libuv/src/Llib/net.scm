@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Jul 25 07:38:37 2014                          */
-;*    Last change :  Thu Feb 15 05:23:06 2018 (serrano)                */
-;*    Copyright   :  2014-18 Manuel Serrano                            */
+;*    Last change :  Sun Jul  9 07:49:15 2023 (serrano)                */
+;*    Copyright   :  2014-23 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    LIBUV net                                                        */
 ;*=====================================================================*/
@@ -28,17 +28,17 @@
 	    
 	    (uv-stream-write-queue-size::long o::UvStream)
 	    (uv-stream-fd::long o::UvStream)
-	    (uv-stream-write ::UvStream ::bstring ::long ::long
-	       #!key callback (loop (uv-default-loop)))
-	    (uv-stream-write2 ::UvStream ::bstring ::long ::long ::obj
-	       #!key callback (loop (uv-default-loop)))
-	    (uv-stream-read-start ::UvStream 
-	       #!key onalloc callback (loop (uv-default-loop)))
-	    (uv-stream-read-stop ::UvStream)
-	    (uv-stream-shutdown ::UvStream
-	       #!key callback (loop (uv-default-loop)))
-	    (uv-listen ::UvStream ::int
-	       #!key callback (loop (uv-default-loop)))
+	    (inline uv-stream-write ::UvStream ::bstring ::long ::long
+	       #!key loop callback arg0 arg1 arg2 arg3 arg4)
+	    (inline uv-stream-write2 ::UvStream ::bstring ::long ::long ::obj
+	       #!key loop callback arg0 arg1 arg2 arg3 arg4)
+	    (inline uv-stream-read-start ::UvStream 
+	       #!key loop onalloc callback)
+	    (inline uv-stream-read-stop ::UvStream)
+	    (inline uv-stream-shutdown ::UvStream
+	       #!key loop callback)
+	    (inline uv-listen ::UvStream ::int
+	       #!key loop callback)
 	    (uv-accept ::UvStream ::UvStream)
 	    (uv-closing?::bool ::UvStream)
 	    (uv-writable?::bool ::UvStream)
@@ -58,9 +58,9 @@
 	    (uv-udp-getsockname::obj ::UvUdp)
 	    (uv-udp-send::obj ::UvUdp ::bstring ::long ::long ::long ::bstring
 	       #!key (family 4) callback (loop (uv-default-loop)))
-	    (uv-udp-recv-start ::UvUdp
-	       #!key onalloc callback (loop (uv-default-loop)))
-	    (uv-udp-recv-stop::int ::UvUdp)
+	    (inline uv-udp-recv-start ::UvUdp
+	       #!key loop onalloc callback)
+	    (inline uv-udp-recv-stop::int ::UvUdp)
 	    (uv-udp-set-ttl handle::UvUdp ::int)
 	    (uv-udp-set-multicast-ttl handle::UvUdp ::int)
 	    (uv-udp-set-multicast-loop ::UvUdp ::bool)
@@ -101,16 +101,8 @@
 ;*    uv-close ::UvStream ...                                          */
 ;*---------------------------------------------------------------------*/
 (define-method (uv-close o::UvStream #!optional callback)
-   (if (procedure? callback)
-       (let ((cb callback))
-	  (set! callback
-	     (lambda ()
-		(with-access::UvStream o (loop)
-		   (uv-pop-gcmark! loop o))
-		(cb))))
-       (with-access::UvStream o (loop)
-	  (uv-pop-gcmark! loop o)))
-   (call-next-method))
+   ($bgl-uv-stream-close o callback)
+   #t)
 
 ;*---------------------------------------------------------------------*/
 ;*    uv-getaddrinfo ...                                               */
@@ -154,73 +146,45 @@
 ;*---------------------------------------------------------------------*/
 ;*    uv-stream-write ...                                              */
 ;*---------------------------------------------------------------------*/
-(define (uv-stream-write o::UvStream buf offset len #!key callback (loop (uv-default-loop)))
-   (letrec ((cb (lambda (status)
-		   ;; make sure buf is referenced to prevent
-		   ;; premature collection
-		   (unless (eq? buf cb)
-		      (uv-pop-gcmark! o cb)
-		      (callback status)))))
-      (let ((r ($uv-write o buf offset len cb loop)))
-	 (when (=fx r 0)
-	    (uv-push-gcmark! o cb))
-	 r)))
+(define-inline (uv-stream-write o::UvStream buf offset len
+		  #!key loop callback arg0 arg1 arg2 arg3 arg4)
+   ;; loop is kept for backward compatibility but it is unused
+   ($uv-write o buf offset len callback arg0 arg1 arg2 arg3 arg4))
 
 ;*---------------------------------------------------------------------*/
 ;*    uv-stream-write2 ...                                             */
 ;*---------------------------------------------------------------------*/
-(define (uv-stream-write2 o::UvStream buf offset len handle::obj #!key callback (loop (uv-default-loop)))
-   (letrec ((cb (lambda (status)
-		   ;; make sure buf is referenced to prevent
-		   ;; premature collection
-		   (unless (eq? buf cb)
-		      (uv-pop-gcmark! o cb)
-		      (callback status)))))
-      (let ((r ($uv-write2 o buf offset len handle cb loop)))
-	 (when (=fx r 0)
-	    (uv-push-gcmark! o cb))
-	 r)))
+(define-inline (uv-stream-write2 o::UvStream buf offset len handle::obj
+		  #!key loop callback arg0 arg1 arg2 arg3 arg4)
+   ;; loop is kept for backward compatibility but it is unused
+   ($uv-write2 o buf offset len handle callback arg0 arg1 arg2 arg3 arg4))
 
 ;*---------------------------------------------------------------------*/
 ;*    uv-stream-read-start ...                                         */
 ;*---------------------------------------------------------------------*/
-(define (uv-stream-read-start o::UvStream #!key onalloc callback (loop (uv-default-loop)))
-   (let ((r ($uv-read-start o onalloc callback loop)))
-      (when (=fx r 0)
-	 (with-access::UvStream o (%callback)
-	    (set! %callback callback))
-	 (uv-push-gcmark! loop o))
-      r))
+(define-inline (uv-stream-read-start o::UvStream #!key loop onalloc callback)
+   ;; loop is kept for backward compatibility but it is unused
+   ($uv-read-start o onalloc callback))
 
 ;*---------------------------------------------------------------------*/
 ;*    uv-stream-read-stop ...                                          */
 ;*---------------------------------------------------------------------*/
-(define (uv-stream-read-stop o::UvStream)
-   (with-access::UvStream o ($builtin loop)
-      (with-access::UvStream o (%callback)
-	 (set! %callback #f))
-      (uv-pop-gcmark! loop o)
-      ($uv-read-stop ($uv-stream-t $builtin))))
+(define-inline (uv-stream-read-stop o::UvStream)
+   ($uv-read-stop o))
 
 ;*---------------------------------------------------------------------*/
 ;*    uv-stream-shutdown ...                                           */
 ;*---------------------------------------------------------------------*/
-(define (uv-stream-shutdown handle #!key callback (loop (uv-default-loop)))
-   (let ((r ($uv-shutdown handle callback loop)))
-      (when (=fx r 0)
-	 (uv-push-gcmark! handle callback)
-	 (uv-push-gcmark! loop handle))
-      r))
+(define-inline (uv-stream-shutdown handle #!key loop callback)
+   ;; loop is kept for backward compatibility but it is unused
+   ($uv-shutdown handle callback))
    
 ;*---------------------------------------------------------------------*/
 ;*    uv-listen ...                                                    */
 ;*---------------------------------------------------------------------*/
-(define (uv-listen handle backlog #!key callback (loop (uv-default-loop)))
-   (let ((r ($uv-listen handle backlog callback loop)))
-      (when (=fx r 0)
-	 (uv-push-gcmark! handle callback)
-	 (uv-push-gcmark! loop handle))
-      r))
+(define-inline (uv-listen handle backlog #!key loop callback)
+   ;; loop is kept for backward compatibility but it is unused
+   ($uv-listen handle backlog callback))
 
 ;*---------------------------------------------------------------------*/
 ;*    uv-accept ...                                                    */
@@ -257,8 +221,8 @@
 (define (uv-tcp-connect handle host port #!key (family::int 4) callback (loop (uv-default-loop)))
    (let ((r ($uv-tcp-connect handle host port family callback loop)))
       (when (=fx r 0)
-	 (uv-push-gcmark! handle callback)
-	 (uv-push-gcmark! loop handle))
+	 (uv-push-gcmark! handle callback "uv-tcp-connect")
+	 (uv-push-gcmark! loop handle "uv-tcp-connect"))
       r))
 
 ;*---------------------------------------------------------------------*/
@@ -270,17 +234,17 @@
 ;*---------------------------------------------------------------------*/
 ;*    uv-close ::UvTcp ...                                             */
 ;*---------------------------------------------------------------------*/
-(define-method (uv-close o::UvTcp #!optional callback)
-   (if (procedure? callback)
-       (let ((cb callback))
-	  (set! callback
-	     (lambda ()
-		(synchronize tcp-mutex
-		   (set! tcp-servers (remq! o tcp-servers)))
-		(cb))))
-       (synchronize tcp-mutex
-	  (set! tcp-servers (remq! o tcp-servers))))
-   (call-next-method))
+;* (define-method (uv-close o::UvTcp #!optional callback)              */
+;*    (if (procedure? callback)                                        */
+;*        (let ((cb callback))                                         */
+;* 	  (set! callback                                               */
+;* 	     (lambda ()                                                */
+;* 		(synchronize tcp-mutex                                 */
+;* 		   (set! tcp-servers (remq! o tcp-servers)))           */
+;* 		(cb))))                                                */
+;*        (synchronize tcp-mutex                                       */
+;* 	  (set! tcp-servers (remq! o tcp-servers))))                   */
+;*    (call-next-method))                                              */
 
 ;*---------------------------------------------------------------------*/
 ;*    uv-tcp-open ...                                                  */
@@ -342,17 +306,17 @@
 ;*---------------------------------------------------------------------*/
 ;*    uv-close ::UvUdp ...                                             */
 ;*---------------------------------------------------------------------*/
-(define-method (uv-close o::UvUdp #!optional callback)
-   (if (procedure? callback)
-       (let ((cb callback))
-	  (set! callback
-	     (lambda ()
-		(synchronize udp-mutex
-		   (set! udp-servers (remq! o udp-servers)))
-		(cb))))
-       (synchronize udp-mutex
-	  (set! udp-servers (remq! o udp-servers))))
-   (call-next-method))
+;* (define-method (uv-close o::UvUdp #!optional callback)              */
+;*    (if (procedure? callback)                                        */
+;*        (let ((cb callback))                                         */
+;* 	  (set! callback                                               */
+;* 	     (lambda ()                                                */
+;* 		(synchronize udp-mutex                                 */
+;* 		   (set! udp-servers (remq! o udp-servers)))           */
+;* 		(cb))))                                                */
+;*        (synchronize udp-mutex                                       */
+;* 	  (set! udp-servers (remq! o udp-servers))))                   */
+;*    (call-next-method))                                              */
 
 ;*---------------------------------------------------------------------*/
 ;*    uv-udp-bind ...                                                  */
@@ -366,20 +330,15 @@
 ;*---------------------------------------------------------------------*/
 ;*    uv-udp-recv-start ...                                            */
 ;*---------------------------------------------------------------------*/
-(define (uv-udp-recv-start o::UvUdp #!key onalloc callback (loop (uv-default-loop)))
-   (with-access::UvUdp o (%procm)
-      (set! %procm (cons callback %procm))
-      (uv-push-gcmark! loop o)
-      ($uv-udp-recv-start o onalloc callback loop)))
+(define-inline (uv-udp-recv-start o::UvUdp #!key loop onalloc callback)
+   ;; loop is kept for backward compatibility but it is unused
+   ($uv-udp-recv-start o onalloc callback))
 
 ;*---------------------------------------------------------------------*/
 ;*    uv-udp-recv-stop ...                                             */
 ;*---------------------------------------------------------------------*/
-(define (uv-udp-recv-stop handle)
-   (with-access::UvUdp handle ($builtin %procm loop)
-      (set! %procm '())
-      (uv-pop-gcmark! loop handle)
-      ($uv-udp-recv-stop ($uv-udp-t $builtin))))
+(define-inline (uv-udp-recv-stop o::UvUdp)
+   ($uv-udp-recv-stop o))
 
 ;*---------------------------------------------------------------------*/
 ;*    uv-udp-getsockname ...                                           */

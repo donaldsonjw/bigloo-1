@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  SERRANO Manuel                                    */
 ;*    Creation    :  Tue Aug  5 10:57:59 1997                          */
-;*    Last change :  Thu Mar 14 14:53:53 2019 (serrano)                */
+;*    Last change :  Wed Jul 19 09:32:33 2023 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    Os dependant variables (setup by configure).                     */
 ;*    -------------------------------------------------------------    */
@@ -48,7 +48,8 @@
 	    __evenv
 	    __r4_ports_6_10_1
 	    __r4_output_6_10_3
-	    __r4_input_6_10_2)
+	    __r4_input_6_10_2
+	    __r5_control_features_6_4)
    
    (extern  ($signal::obj (::int ::obj) "bgl_signal")
 	    (macro $sigsetmask::int (::int) "BGL_SIGSETMASK")
@@ -133,6 +134,22 @@
 	    (macro $syslog-log-notice::int "LOG_NOTICE")
 	    (macro $syslog-log-info::int "LOG_INFO")
 	    (macro $syslog-log-debug::int "LOG_DEBUG")
+	    ($getrlimit::obj (::long) "bgl_getrlimit")
+	    ($setrlimit!::bool (::long ::long ::long) "bgl_setrlimit")
+	    (macro $rlimit-core::int "RLIMIT_CORE")
+	    (macro $rlimit-cpu::int "RLIMIT_CPU")
+	    (macro $rlimit-data::int "RLIMIT_DATA")
+	    (macro $rlimit-fsize::int "RLIMIT_FSIZE")
+	    (macro $rlimit-locks::int "RLIMIT_LOCKS")
+	    (macro $rlimit-memlock::int "RLIMIT_MEMLOCK")
+	    (macro $rlimit-msgqueue::int "RLIMIT_MSGQUEUE")
+	    (macro $rlimit-nice::int "RLIMIT_NICE")
+	    (macro $rlimit-nofile::int "RLIMIT_NOFILE")
+	    (macro $rlimit-nproc::int "RLIMIT_NPROC")
+	    (macro $rlimit-rss::int "RLIMIT_RSS")
+	    (macro $rlimit-rttime::int "RLIMIT_RTTIME")
+	    (macro $rlimit-sigpending::int "RLIMIT_SIGPENDING")
+	    (macro $rlimit-stack::int "RLIMIT_STACK")
 
 	    ($bgl-dlsym::custom (::bstring ::bstring ::bstring) "bgl_dlsym")
 	    ($bgl-dlsym-get::obj (::custom) "bgl_dlsym_get")
@@ -289,7 +306,9 @@
 	    (inline closelog)
 	    (syslog-option::int . opts)
 	    (syslog-facility::int ::symbol)
-	    (syslog-level::int ::symbol)))
+	    (syslog-level::int ::symbol)
+	    (getrlimit::obj ::obj)
+	    (setrlimit!::bool ::obj ::elong ::elong)))
 
 ;*---------------------------------------------------------------------*/
 ;*    Variables setup ...                                              */
@@ -1031,27 +1050,28 @@
 		  "")))
       (if (not (string? flib))
 	  (err "Can't find library" lib)
-	  (let* ((ini (if (not init) "" init))
-		 (val (%dload flib ini mod)))
-	     (case val
-		((__dload_noarch)
-		 (err "Not supported on this architecture" flib))
-		((__dload_error)
-		 (proc-err flib (%dload-error) flib))
-		((__dload_noinit)
-		 (cond
-		    ((and (equal? init %dload-init-sym) (not module))
-		     (warning (string-append "dynamic-load: " flib)
-			"Cannot find library init entry point -- "
-			init))
-		    ((not init)
-		     #unspecified)
-		    (else
-		     (proc-err flib
-			"Cannot find library init entry point"
-			init))))
-		(else
-		 val))))))
+	  (let ((ini (if (not init) "" init)))
+	     (multiple-value-bind (val mod)
+		(%dload flib ini mod)
+		(case val
+		   ((__dload_noarch)
+		    (err "Not supported on this architecture" flib))
+		   ((__dload_error)
+		    (proc-err flib (%dload-error) flib))
+		   ((__dload_noinit)
+		    (cond
+		       ((and (equal? init %dload-init-sym) (not module))
+			(warning (string-append "dynamic-load: " flib)
+			   "Cannot find library init entry point -- "
+			   init))
+		       ((not init)
+			(values #unspecified mod))
+		       (else
+			(proc-err flib
+			   "Cannot find library init entry point"
+			   init))))
+		   (else
+		    (values val mod))))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    dynamic-unload ...                                               */
@@ -1072,8 +1092,15 @@
 ;*    dynamic-load-symbol ...                                          */
 ;*---------------------------------------------------------------------*/
 (define (dynamic-load-symbol lib name #!optional module)
-   (let ((sym (if (string? module) (bigloo-module-mangle name module) name)))
-      ($bgl-dlsym lib name sym)))
+   (let ((sym (if (string? module) (bigloo-module-mangle name module) name))
+         (flib (cond-expand
+		  (bigloo-c
+		   (find-file/path lib *dynamic-load-path*))
+		  (bigloo-jvm
+		   lib)
+		  (else
+		   (find-file/path lib *dynamic-load-path*)))))
+      ($bgl-dlsym flib name sym)))
 
 ;*---------------------------------------------------------------------*/
 ;*    dynamic-load-symbol-get ...                                      */
@@ -1356,3 +1383,56 @@
 	  (else (error "syslog-level" "unknown level" lvl))))
       (else
        0)))
+
+;*---------------------------------------------------------------------*/
+;*    limit-resource-no ...                                            */
+;*---------------------------------------------------------------------*/
+(define (limit-resource-no r id)
+   
+   (define (symbol->resource r)
+      (cond-expand
+	 ((and bigloo-c (config have-getrlimit #t))
+	  (case r
+	     ((CORE) $rlimit-core)
+	     ((CPU) $rlimit-cpu)
+	     ((DATA) $rlimit-data)
+	     ((FSIZE) $rlimit-fsize)
+	     ((LOCKS) $rlimit-locks)
+	     ((MEMLOCK) $rlimit-memlock)
+	     ((MSGQUEUE) $rlimit-msgqueue)
+	     ((NICE) $rlimit-nice)
+	     ((NOFILE) $rlimit-nofile)
+	     ((NPROC) $rlimit-nproc)
+	     ((RSS) $rlimit-rss)
+	     ((RTTIME) $rlimit-rttime)
+	     ((SIGPENDING) $rlimit-sigpending)
+	     ((STACK) $rlimit-stack)
+	     (else (error id "illegal limit resource" r))))
+	 (else (error id "limit unsupported" r))))
+   
+   (cond
+      ((fixnum? r) r)
+      ((symbol? r) (symbol->resource r))
+      (else (bigloo-type-error id "integer-or-symbol" r))))
+
+;*---------------------------------------------------------------------*/
+;*    getrlimit ...                                                    */
+;*---------------------------------------------------------------------*/
+(define (getrlimit r)
+   (cond-expand
+      ((and bigloo-c (config have-getrlimit #t))
+       ($getrlimit (limit-resource-no r "getrlimit")))
+      (else
+       (values -1 -1))))
+
+;*---------------------------------------------------------------------*/
+;*    setrlimit! ...                                                   */
+;*---------------------------------------------------------------------*/
+(define (setrlimit! r soft hard)
+   (cond-expand
+      ((and bigloo-c (config have-getrlimit #t))
+       ($setrlimit! (limit-resource-no r "setrlimit!") soft hard))
+      (else
+       -1)))
+
+

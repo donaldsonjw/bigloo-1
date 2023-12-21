@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Apr 25 14:20:42 1996                          */
-;*    Last change :  Mon Nov 29 15:44:27 2021 (serrano)                */
+;*    Last change :  Fri Jan 28 08:32:42 2022 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    The `object' library                                             */
 ;*    -------------------------------------------------------------    */
@@ -59,8 +59,8 @@
 	    (macro object-header-size-set!::long (::obj ::long)
 		   "BGL_OBJECT_HEADER_SIZE_SET")
 
-	    (macro $isa-c-backend::bool (::bool ::bool)
-		   "BGL_ISA_C_BACKEND")
+	    (macro $cond-expand-isa-arch64?::bool ()
+		   "BGL_CONDEXPAND_ISA_ARCH64")
 	    (macro %object-type-number::long
 		   "OBJECT_TYPE")
 	    (macro %object?::bool (::obj)
@@ -1000,26 +1000,17 @@
 ;*    register-class! ...                                              */
 ;*---------------------------------------------------------------------*/
 (define (register-class! name module super hash creator allocator constructor nil shrink plain virtual)
-   (synchronize $bigloo-generic-mutex
-      (initialize-objects!)
-      (when (and super (not (class? super)))
-	 (error name "Illegal super-class for class" super))
+   
+   (define (new-class!)
       (when (=fx *nb-classes* *nb-classes-max*)
 	 (double-nb-classes!))
-      (unless (vector? plain)
-	 (error "register-class!" "Fields not a vector" plain))
-      (let ((k (class-exists name)))
-	 (when (class? k)
-	    (warning "register-class!" "Dangerous class redefinition: \"" name "@"
-	       module
-	       "\" (" name "@" (class-module k) ")")))
       (let* ((num   (+fx %object-type-number *nb-classes*))
 	     (depth (if (class? super)
 			(+fx (class-depth super) 1)
 			0))
 	     (fs (if (class? super)
-			   (vector-append (class-all-fields super) plain)
-			   plain))
+		     (vector-append (class-all-fields super) plain)
+		     plain))
 	     (vs (make-class-virtual-slots-vector super virtual))
 	     (class (make-class name module
 		       num *inheritance-cnt*
@@ -1071,7 +1062,25 @@
 		       (set! *inheritance-cnt* j))))))
 	 ;; and we adjust the method arrays of all generic functions
 	 (generics-add-class! num (if (class? super) (class-index super) num))
-	 class)))
+	 class))
+   
+   (synchronize $bigloo-generic-mutex
+      (initialize-objects!)
+      (when (and super (not (class? super)))
+	 (error name "Illegal super-class for class" super))
+      (unless (vector? plain)
+	 (error "register-class!" "Fields not a vector" plain))
+      (let ((k (class-exists name)))
+	 (cond
+	    ((not (class? k))
+	     (new-class!))
+	    ((=fx (class-hash k) hash)
+	     k)
+	    (else
+	     (warning "register-class!" "Dangerous class redefinition: \"" name "@"
+		module
+		"\" (" name "@" (class-module k) ")")
+	     (new-class!))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    make-class-virtual-slots-vector ...                              */
@@ -1329,9 +1338,12 @@
 (define-inline (%isa-object/cdepth? obj class cdepth)
    (cond-expand
       (bigloo-c
-       ($isa-c-backend
-	  (%isa64-object/cdepth? obj class cdepth)
-	  (%isa32-object/cdepth? obj class cdepth)))
+       ;; the decision to use the 32 or 64 backend must be delayed
+       ;; to C, otherwise the Bigloo C tarball distribution would
+       ;; not be portable across various architectures
+       (if ($cond-expand-isa-arch64?)
+	   (%isa64-object/cdepth? obj class cdepth)
+	   (%isa32-object/cdepth? obj class cdepth)))
       (else
        (%isa32-object/cdepth? obj class cdepth))))
 

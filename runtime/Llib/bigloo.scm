@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Jan 20 08:24:40 1995                          */
-;*    Last change :  Fri Dec  3 18:33:17 2021 (serrano)                */
+;*    Last change :  Sun May 28 06:51:37 2023 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    The bigloo runtime utility functions                             */
 ;*=====================================================================*/
@@ -131,12 +131,11 @@
 	    (macro close-init-string::obj (::obj)
 		   "close_init_string")
 	    
-	    (macro var->root::obj (::obj)
-		   "(obj_t)&")
-	    (macro GC-add-globv!::obj (::obj)
-		   "GC_ADD_GLOBV")
-	    (macro GC-add-roots!::obj (::obj ::obj)
-		   "GC_ADD_ROOTS")
+	    (macro $GC-collect::void ()
+		   "GC_COLLECT")
+
+	    (macro $GC-finalize::void ()
+		   "GC_invoke_finalizers")
 
 	    (macro %exit::obj (::obj)
 		   "BIGLOO_EXIT")
@@ -245,13 +244,6 @@
 	       (method static close-init-string::obj (::obj)
 		       "close_init_string")
 	       
-	       (method static var->root::obj (::obj)
-		       "VAR_ROOT")
-	       (method static GC-add-globv!::obj (::obj)
-		       "GC_ADD_GLOBV")
-	       (method static GC-add-roots!::obj (::obj ::obj)
-		       "GC_ADD_ROOTS")
-	       
 	       (method static %exit::obj (::obj)
 		       "BIGLOO_EXIT")
 
@@ -293,7 +285,9 @@
 	    (bmem-reset!)
 	    
 	    (time::obj ::procedure)
-	    (bigloo-gc-verbose-set! ::bool)
+	    (gc-verbose-set! ::bool)
+	    (gc #!key (finalize #t))
+	    (inline gc-finalize)
 
 	    (inline make-cell::cell ::obj)
 	    (inline cell? ::obj)
@@ -714,13 +708,29 @@
       (else #f)))
 
 ;*---------------------------------------------------------------------*/
-;*    bigloo-gc-verbose-set! ...                                       */
+;*    gc-verbose-set! ...                                              */
 ;*---------------------------------------------------------------------*/
-(define (bigloo-gc-verbose-set! proc)
+(define (gc-verbose-set! bool)
    (cond-expand
-      (bigloo-c ($bgl-gc-verbose-set! proc))
+      (bigloo-c ($bgl-gc-verbose-set! bool))
       (else #f)))
-   
+
+;*---------------------------------------------------------------------*/
+;*    gc ...                                                           */
+;*---------------------------------------------------------------------*/
+(define (gc #!key (finalize #t))
+   (cond-expand
+      (bigloo-c (begin ($GC-collect) (when finalize ($GC-finalize))))
+      (else #f)))
+
+;*---------------------------------------------------------------------*/
+;*    gc-finalize ...                                                  */
+;*---------------------------------------------------------------------*/
+(define-inline (gc-finalize)
+   (cond-expand
+      (bigloo-c ($GC-finalize))
+      (else #f)))
+
 ;*---------------------------------------------------------------------*/
 ;*    make-cell ...                                                    */
 ;*---------------------------------------------------------------------*/

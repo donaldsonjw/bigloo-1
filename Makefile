@@ -3,8 +3,8 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Wed Jan 14 13:40:15 1998                          */
-#*    Last change :  Thu Dec  2 15:07:37 2021 (serrano)                */
-#*    Copyright   :  1998-2021 Manuel Serrano, see LICENSE file        */
+#*    Last change :  Tue Jul 11 15:27:19 2023 (serrano)                */
+#*    Copyright   :  1998-2023 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    This Makefile *requires* GNU-Make.                               */
 #*    -------------------------------------------------------------    */
@@ -199,7 +199,7 @@ boot-c: checkgmake
 	if [ "$(UNISTRINGCUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C libunistring boot; \
         fi
-<	if [ "$(LIBBACKTRACECUSTOM)" = "yes" ]; then \
+	if [ "$(LIBBACKTRACECUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C libbacktrace boot; \
         fi
 	if [ -x $(BGLBUILDBINDIR)/bigloo ]; then \
@@ -303,20 +303,24 @@ dohostboot:
 	if [ "$(PCRE2CUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C pcre2 clean; \
 	  $(MAKE) -C pcre2 boot; \
+	  $(MAKE) -C pcre2 install; \
         fi
 	if [ "$(PCRECUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C pcre clean; \
 	  $(MAKE) -C pcre boot; \
+	  $(MAKE) -C pcre install; \
         fi
 	if [ "$(UNISTRINGCUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C libunistring clean; \
 	  $(MAKE) -C libunistring boot; \
+	  $(MAKE) -C libunistring install; \
         fi
 	@ mkdir -p bin
 	$(MAKE) -C runtime hostboot BBFLAGS="-w"
 	$(MAKE) -C comptime -i touchall
 	$(MAKE) -C comptime hostboot BBFLAGS="-w -unsafeh"
 	$(MAKE) -C runtime heap-c BIGLOO=$(BOOTBINDIR)/bigloo
+	$(MAKE) -C comptime -i touchall
 	$(MAKE) -C comptime BIGLOO=$(BOOTBINDIR)/bigloo
 	$(MAKE) -C runtime clean-quick
 	$(MAKE) -C runtime heap libs BIGLOO=$(BOOTBINDIR)/bigloo
@@ -414,6 +418,10 @@ fullbootstrap-sans-configure:
 	  $(MAKE) -C libuv clean; \
 	  $(MAKE) -C libuv boot; \
         fi
+	if [ "$(LIBBACKTRACECUSTOM)" = "yes" ]; then \
+	  $(MAKE) -C libbacktrace clean; \
+	  $(MAKE) -C libbacktrace boot; \
+        fi
 	$(MAKE) -C comptime -i touchall; $(MAKE) -C comptime EFLAGS+=-gself
 	$(MAKE) -C runtime -i touchall; $(MAKE) -C runtime heap libs-c
 	$(MAKE) -C comptime -i touchall; $(MAKE) -C comptime
@@ -473,7 +481,7 @@ distrib: ChangeLog
            cd $(BUILDDIRNAME) && \
            cat $(BOOTDIR)/Makefile.config | sed 's/BFEATUREFLAGS=.*/BFEATUREFLAGS=-srfi enable-gmp/' | sed 's/BOOTFLAGS=.*/BOOTFLAGS=/' > Makefile.config \
            && cp $(BOOTDIR)/Makefile.buildconfig Makefile.buildconfig \
-           && $(MAKE) true-distrib)
+           && $(MAKE) EFLAGS="$(EFLAGS) -stdc" true-distrib)
 	@ $(RM) -rf $(DISTRIBTMPDIR)/bigloo-$(RELEASE)
 
 true-distrib: $(DISTRIBDIR)/bigloo-$(RELEASE)$(VERSION).tar.gz
@@ -739,6 +747,9 @@ install-libs: install-dirs
         fi
 	if [ "$(LIBUVCUSTOM)" = "yes" ]; then \
 	  $(MAKE) -C libuv install; \
+        fi
+	if [ "$(LIBBACKTRACECUSTOM)" = "yes" ]; then \
+	  $(MAKE) -C libbacktrace install; \
         fi
 	(cp Makefile.config $(DESTDIR)$(LIBDIR)/$(FILDIR)/Makefile.config && \
          chmod $(MODFILE) $(DESTDIR)$(LIBDIR)/$(FILDIR)/Makefile.config)

@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Wed Feb 24 15:25:03 1999                          */
-;*    Last change :  Tue Oct 19 18:31:14 2021 (serrano)                */
-;*    Copyright   :  2001-21 Manuel Serrano                            */
+;*    Last change :  Tue May  9 09:00:48 2023 (serrano)                */
+;*    Copyright   :  2001-23 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    The expander for srfi forms.                                     */
 ;*=====================================================================*/
@@ -121,7 +121,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    The list of supported srfi by the interpreter                    */
 ;*    -------------------------------------------------------------    */
-;*    The four initial supported srfi are:                             */
+;*    The initial supported srfis are:                                 */
 ;*       - srfi-0                                                      */
 ;*       - srfi-xxx                                                    */
 ;*       - ...                                                         */
@@ -150,7 +150,9 @@
 		     srfi-10
 		     srfi-22
 		     srfi-28
-		     srfi-30))))
+		     srfi-30
+		     rlimit
+		     gc))))
       (if $configure-auto-finalizer
 	  (cons* 'bigloo-finalizer 'bigloo-weakptr l)
 	  l)))
@@ -249,9 +251,10 @@
 ;*    progn ...                                                        */
 ;*---------------------------------------------------------------------*/
 (define (progn body)
-   (if (pair? (cdr body))
-       `(begin ,@body)
-       (car body)))
+   (cond
+      ((not (pair? body)) `(begin ,(if (null? body) #unspecified body)))
+      ((null? (cdr body)) (car body))
+      (else `(begin ,@body))))
 
 ;*---------------------------------------------------------------------*/
 ;*    expand-cond-exapnd ...                                           */
@@ -267,7 +270,9 @@
        (match-case clause
 	  (((kwote else) . ?body)
 	   (if (null? else)
-	       (e (evepairify (progn body) x) e)
+	       (if (null? body)
+		   #unspecified
+		   (e (evepairify (progn body) x) e))
 	       (expand-error "cond-expand" "Illegal form" x)))
 	  ((((kwote and)) . ?body)
 	   (e (evepairify (progn body) x) e))
@@ -278,7 +283,9 @@
 			  x)
 	      e))
 	  ((((kwote and) ?req1 ?req2 . ?reqs) . ?body)
-	   (expand-cond-expand-and x e req1 req2 reqs body else))
+	   (expand-cond-expand-and x e req1 req2 reqs
+	      (if (null? body) '(#unspecified) body)
+	      else))
 	  ((((kwote or)) . ?body)
 	   (e (evepairify `(cond-expand ,@else) x) e))
 	  ((((kwote or) ?req1) . ?body)
@@ -309,7 +316,9 @@
 	      e))
 	  (((and (? symbol?) ?feature) . ?body)
 	   (e (evepairify (if (memq feature features)
-			      (progn body)
+			      (if (null? body)
+				  #unspecified
+				  (progn body))
 			      `(cond-expand ,@else))
 			  x)
 	      e))
@@ -322,24 +331,25 @@
 ;*    expand-cond-expand-and ...                                       */
 ;*---------------------------------------------------------------------*/
 (define (expand-cond-expand-and x e req1 req2 reqs body else)
-   (e (evepairify `(cond-expand
-		      (,req1 (cond-expand
-				((and ,req2 ,@reqs) ,@body)
-				,@else))
-		      ,@else)
-		  x)
-      e))
+   (let ((ebody (evepairify (progn body) body)))
+      (e (evepairify `(cond-expand
+			 (,req1 (cond-expand
+				   ((and ,req2 ,@reqs) ,ebody)
+				   ,@else))
+			 ,@else)
+	    x)
+	 e)))
 
 ;*---------------------------------------------------------------------*/
 ;*    expand-cond-expand-or ...                                        */
 ;*---------------------------------------------------------------------*/
 (define (expand-cond-expand-or x e req1 req2 reqs body else)
-   (let ((bd (gensym)))
+   (let ((ebody (evepairify (progn body) body)))
       (e (evepairify `(cond-expand
-			 (,req1 ,(evepairify (progn body) body))
+			 (,req1 ,ebody)
 			 (else
 			  (cond-expand
-			     ((or ,req2 ,@reqs) ,@body)
+			     ((or ,req2 ,@reqs) ,ebody)
 			     ,@else)))
 		     x)
 	 e)))

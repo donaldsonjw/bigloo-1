@@ -1,7 +1,6 @@
 Bigloo, a practical Scheme compiler
 ===================================
-
-[![Travis](https://api.travis-ci.org/manuel-serrano/bigloo.svg)](https://travis-ci.org/manuel-serrano/bigloo/builds)
+![branch workflow](https://github.com/manuel-serrano/bigloo/actions/workflows/bigloo.yml/badge.svg)
 
 Bigloo is a Scheme development environment that includes a compiler
 generating C code and Java classes, and an interpreter. Bigloo is the
@@ -68,9 +67,9 @@ decomposed as follows:
   6. install everything:
  `make install-sans-docs`
  
-You can also the check the `.travis.yml` script used for the continuous
-integration. It shows how to compile, run, and test, the current Bigloo
-version.
+You can also the check the `.github/workflows/bigloo.yml` script used
+for the continuous integration. It shows how to compile, run, and
+test, the current Bigloo version.
  
 See the `doc` directory for extra hints and information about the Bigloo
 installation process.

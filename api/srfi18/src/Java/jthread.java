@@ -1,10 +1,10 @@
 /*=====================================================================*/
-/*    serrano/prgm/project/bigloo/api/srfi18/src/Java/jthread.java     */
+/*    /tmp/BGL2/bigloo-unstable/api/srfi18/src/Java/jthread.java       */
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Fri Feb 22 12:12:04 2002                          */
-/*    Last change :  Tue Aug  9 10:57:47 2016 (serrano)                */
-/*    Copyright   :  2002-16 Manuel Serrano                            */
+/*    Last change :  Mon Dec 18 16:10:10 2023 (serrano)                */
+/*    Copyright   :  2002-23 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Java utilities for native Bigloo fair threads implementation.    */
 /*=====================================================================*/
@@ -15,17 +15,12 @@
 package bigloo.srfi18;
 import java.lang.*;
 import bigloo.*;
+import bigloo.pthread.*;
 
 /*---------------------------------------------------------------------*/
 /*    jthread                                                          */
 /*---------------------------------------------------------------------*/
-public class jthread extends Thread {
-   private Object specific = bigloo.foreign.BUNSPEC;
-   private Object cleanup = bigloo.foreign.BUNSPEC;
-   private Object thread = bigloo.foreign.BUNSPEC;
-   private procedure thunk;
-   protected bgldynamic env;
-
+public class jthread extends bigloo.pthread.bglpthread {
    static jthread nilthread = new jthread();
    
    // debug
@@ -44,11 +39,11 @@ public class jthread extends Thread {
       
    // public constructor
    public jthread() {
-      ;
+      super();
    }
    
    public jthread( procedure t ) {
-      super();
+      super(t);
       thunk = t;
    }
 
@@ -57,6 +52,10 @@ public class jthread extends Thread {
       return nilthread;
    }
 
+   public void mutexes_unlock() {
+      jmutex.mutexes_unlock(thread);
+   }
+   
    // public SPECIFIC get
    public Object SPECIFIC() {
       return specific;
@@ -77,48 +76,10 @@ public class jthread extends Thread {
       cleanup = p;
    }
    
-   // The thread entry-point
-   public void start( Object t, boolean b ) {
-      thread = t;
-      env = new bgldynamic( bgldynamic.abgldynamic.get() );
-      
-      start();
-   }
-
-   // Run the thread
-   public void run() {
-      try {
-	 thunk.funcall0();
-      } catch( Throwable e ) {
-	 try {
-	    foreign.internalerror( e );
-	 } catch( Throwable t ) {
-	    System.exit( 1 );
-	 }
-      } finally {
-	 jmutex.mutexes_unlock( thread );
-
-	 if( cleanup instanceof procedure ) {
-	    ((procedure)cleanup).funcall1( thread );
-	 }
-      }
-   }
-
    // Terminate a thread
    public static boolean terminate( jthread thread ) {
       thread.interrupt();
       return true;
-   }
-
-   // Returns the current thread
-   public static Object current_thread() {
-      Thread t = currentThread();
-
-      if( t instanceof jthread ) {
-	 return ((jthread)t).thread;
-      } else {
-	 return bigloo.foreign.BFALSE;
-      }
    }
 
    // Yield the processor

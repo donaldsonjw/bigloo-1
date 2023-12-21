@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/api/sqlite/src/Llib/engine.scm       */
+;*    .../project/bigloo/bigloo/api/sqlite/src/Llib/engine.scm         */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue Jan 16 18:35:10 2007                          */
-;*    Last change :  Fri Aug  7 19:49:50 2015 (serrano)                */
-;*    Copyright   :  2007-15 Manuel Serrano                            */
+;*    Last change :  Mon Dec 18 10:28:43 2023 (serrano)                */
+;*    Copyright   :  2007-23 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    Simple SQLTINY evaluator                                         */
 ;*=====================================================================*/
@@ -702,7 +702,7 @@
 			(raise
 			 (instantiate::&error
 			    (proc "sqltiny-select-result")
-			    (msg (format "SQL error: not implemented ~a" expr))
+			    (msg (format "SQL error: not implemented (FUNCALL) ~a" expr))
 			    (obj obj)))))))
 	     (values 
 	      (lambda (row rows)
@@ -715,7 +715,7 @@
        (raise
 	(instantiate::&error
 	   (proc "sqltiny-select-result")
-	   (msg (format "SQL error: not implemented ~a" expr))
+	   (msg (format "SQL error: not implemented (ELSE) ~a" expr))
 	   (obj obj))))))
 
 ;*---------------------------------------------------------------------*/
@@ -723,7 +723,7 @@
 ;*---------------------------------------------------------------------*/
 (define (compile-expr expr env obj builtin)
    (match-case expr
-      ((or #t (? integer?) (? string?))
+      ((or (? integer?) (? string?))
        (lambda (rows) expr))
       ((colref ?table-name ?col-name)
        (multiple-value-bind (i j)
@@ -766,11 +766,14 @@
 	     ((and)
 	      (lambda (rows)
 		 (and (c1 rows) (c2 rows))))
+	     ((#t)
+	      (lambda (rows)
+		 #t))
 	     (else
 	      (raise
 	       (instantiate::&error
 		  (proc "compile-expr")
-		  (msg (format "SQL error: not implemented ~a" expr))
+		  (msg (format "SQL error: not implemented (OP) ~a" expr))
 		  (obj obj)))))))
       ((is-select ?select-statement)
        (let ((select-c (compile-expr select-statement env obj builtin)))
@@ -815,7 +818,7 @@
 	      (raise
 	       (instantiate::&error
 		  (proc "compile-expr")
-		  (msg (format "SQL error: not implemented ~a" expr))
+		  (msg (format "SQL error: not implemented (GLOB) ~a" expr))
 		  (obj obj))))
 	     ((REGEXP)
 	      (if (eq? no 'not)
@@ -831,13 +834,15 @@
 	      (raise
 	       (instantiate::&error
 		  (proc "compile-expr")
-		  (msg (format "SQL error: not implemented ~a" expr))
+		  (msg (format "SQL error: not implemented (MATCH) ~a" expr))
 		  (obj obj)))))))
+      (#t
+       (lambda (rows) #t))
       (else
        (raise
 	(instantiate::&error
 	   (proc "compile-expr")
-	   (msg (format "SQL error: not implemented ~a" expr))
+	   (msg (format "SQL error: not implemented (ELSE) ~a" expr))
 	   (obj obj))))))
 
 ;*---------------------------------------------------------------------*/

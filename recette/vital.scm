@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue Dec  3 17:11:11 2002                          */
-;*    Last change :  Mon Sep 27 10:36:50 2021 (serrano)                */
-;*    Copyright   :  2002-21 Manuel Serrano                            */
+;*    Last change :  Wed Jul 12 16:49:41 2023 (serrano)                */
+;*    Copyright   :  2002-23 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    Preliminary tests for Bigloo.                                    */
 ;*=====================================================================*/
@@ -349,6 +349,25 @@
       (cond
 	 (x 111)
 	 (else 222))))
+
+;*---------------------------------------------------------------------*/
+;*    bug-data-flow-lub2 ...                                           */
+;*---------------------------------------------------------------------*/
+(define (bug-data-flow-lub2 s newest-d)
+   (define check-date?
+      (if (getenv "foo") list cons))
+   (let ((date1 #f))
+      (if (= s 4)
+	  (begin
+	     (set! date1 "tutu")
+	     (if (check-date? date1 newest-d)
+		 #t
+		 (set! date1 #f)))
+	  (begin
+	     (set! date1 "toto")
+	     (set! date1 #f)))
+      (when date1
+	 4)))
 
 ;*---------------------------------------------------------------------*/
 ;*    test-vital ...                                                   */
@@ -784,7 +803,13 @@
    (test "cond-expand(or-eval)" (eval '(cond-expand
 					  ((or bigloo bigloo-eval) 5)
 					  (else -1)))
-	 5)
+      5)
+   (test "cond-expand(or-empty)" (eval (cond-expand ((or chicken bigloo)) (else 3)))
+      #unspecified)
+   (test "cond-expand(or-empty2)" (eval (cond-expand ((or chicken gambit)) (else 3)))
+      3)
+   (test "cond-expand(or-empty3)" (eval (cond-expand ((or chicken gambit)) (else)))
+      #unspecified)
    (test "cond-expand(or)" (cond-expand-foo 3) 3)
    (test "cond-expand" (cond-expand ((and bigloo bigloo) 1) (else 2)) 1)
    (test "cond-expand" (cond-expand (xxx 1) (else 2)) 2)
@@ -933,5 +958,6 @@
    (test "cnst.6" (int8? (car (list '#!rest))) #f)
    (test "cnst.7" (int8? #s8:1) #t)
    (test "cnst.8" (int8? (car (list #s8:1))) #t)
-   (test "cnst.9" (eq? (car (list #!optional)) #!optional) #t))
+   (test "cnst.9" (eq? (car (list #!optional)) #!optional) #t)
+   (test "lub" (bug-data-flow-lub2 3 #f) #f))
      
