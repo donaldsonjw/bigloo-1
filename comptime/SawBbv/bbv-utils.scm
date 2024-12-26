@@ -3,10 +3,10 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Jul 27 08:57:51 2017                          */
-;*    Last change :  Fri Dec 15 08:55:25 2023 (serrano)                */
-;*    Copyright   :  2017-23 Manuel Serrano                            */
+;*    Last change :  Fri Jun 28 08:48:02 2024 (serrano)                */
+;*    Copyright   :  2017-24 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
-;*    BB manipulations                                                 */
+;*    BBB manipulations                                                */
 ;*=====================================================================*/
 
 ;*---------------------------------------------------------------------*/
@@ -36,12 +36,13 @@
 	    saw_bbv-specialize
 	    saw_bbv-cache
 	    saw_bbv-range
-	    saw_bbv-debug)
+	    saw_bbv-debug
+	    saw_bbv-gc)
 
-   (export  (type-in?::bool ::obj ::pair-nil)
+   (export  (<=ty ::obj ::obj)
 	    (set-max-label! blocks::pair-nil)
 	    (genlabel)
-	    (replace ::pair-nil ::obj ::obj)
+	    (list-replace ::pair-nil ::obj ::obj)
 	    (block->block-list regs b::block)
 	    (redirect-block! b::blockS old::blockS new::blockS)
 	    (replace-block! ::blockS ::blockS #!key debug)
@@ -49,19 +50,19 @@
 	    (bbv-ctx-extend-live-out-regs::bbv-ctx ::bbv-ctx ::rtl_ins/bbv)))
 
 ;*---------------------------------------------------------------------*/
-;*    type-in? ...                                                     */
+;*    <=ty ...                                                         */
 ;*---------------------------------------------------------------------*/
-(define (type-in? type types)
-   
-   (define (type-eq? x y)
-      (cond
-	 ((eq? x y) #t)
-	 ((eq? x *bint*) (or (eq? y *long*) (eq? y 'number)))
-	 ((eq? x *long*) (or (eq? y *bint*) (eq? y 'number)))
-	 ((or (eq? x 'number) (eq? y 'number)) #f)
-	 (else (is-subtype? x y))))
-   
-   (any (lambda (t) (type-eq? t type)) types))
+(define (<=ty x y)
+   (cond
+      ((eq? y *obj*) #t)
+      ((eq? x y) #t)
+      ((eq? x *bint*) (or (eq? y *long*) (eq? y 'number)))
+      ((eq? x *long*) (or (eq? y *bint*) (eq? y 'number)))
+      ((eq? x *real*) (or (eq? y *breal*) (eq? y 'number)))
+      ((eq? x *breal*) (or (eq? y *real*) (eq? y 'number)))
+      ((or (eq? x 'number) (eq? y 'number)) #f)
+      ((eq? y *pair-nil*) #f)
+      (else (is-subtype? x y))))
 
 ;*---------------------------------------------------------------------*/
 ;*    *label* ...                                                      */
@@ -83,9 +84,9 @@
       blocks))
 
 ;*---------------------------------------------------------------------*/
-;*    replace ...                                                      */
+;*    list-replace ...                                                 */
 ;*---------------------------------------------------------------------*/
-(define (replace lst old new)
+(define (list-replace lst old new)
    (let loop ((l lst))
       (cond
 	 ((null? l) l)
@@ -123,7 +124,7 @@
       (trace-item "new="(block-label new) " "
 	 (map block-label (block-succs new)))
       (with-access::blockS b (succs first)
-	 (set! succs (replace succs old new))
+	 (set! succs (list-replace succs old new))
 	 (with-access::blockS old (preds)
 	    (block-preds-update! old (remq! b preds)))
 	 (with-access::block new (preds)
@@ -149,7 +150,7 @@
 			 ((rtl_ins-switch? ins)
 			  (with-access::rtl_ins ins (fun)
 			     (with-access::rtl_switch fun (labels)
-				(set! labels (replace labels old new)))))))
+				(set! labels (list-replace labels old new)))))))
 	    first)))
    b)
 
@@ -157,17 +158,31 @@
 ;*    replace-block! ...                                               */
 ;*    -------------------------------------------------------------    */
 ;*    Replace one "old" block with a "new" one. Reconnect the preds    */
-;*    of the old block but disconnect the succs of the old block.      */
+;*    of the old block and disconnect the succs of the old block.      */
 ;*---------------------------------------------------------------------*/
 (define (replace-block! old::blockS new::blockS #!key debug)
    (with-trace 'bbv-utils "replace-block!"
-      (trace-item "old=" (block-label old) " "
-	 (map block-label (block-succs old)))
-      (trace-item "new="(block-label new) " "
-	 (map block-label (block-succs new)))
+      (trace-item "old=#" (block-label old)
+	 " succs=" (map (lambda (s)
+			   (format "#~a~a" (block-label s)
+			      (if (block-live? s) "+" "-")))
+		      (block-succs old))
+	 " preds=" (map (lambda (s)
+			   (format "#~a~a" (block-label s)
+			      (if (block-live? s) "+" "-")))
+		      (block-preds old)))
+      (trace-item "new=#"(block-label new)
+	 " succs=" (map (lambda (s)
+			   (format "#~a~a" (block-label s)
+			      (if (block-live? s) "+" "-")))
+		      (block-succs new))
+	 " preds=" (map (lambda (s)
+			   (format "#~a~a" (block-label s)
+			      (if (block-live? s) "+" "-")))
+		      (block-preds new)))
       (when *bbv-debug*
-	 (assert-block old "replace-block.old!")
-	 (assert-block new "replace-block.new!"))
+	 (assert-block old "replace-block!.old>")
+	 (assert-block new "replace-block!.new>"))
       (unless (eq? old new)
 	 ;; debugging
 	 (when (and debug *bbv-debug*)
@@ -181,18 +196,20 @@
 		     (error "replace-block!"
 			(format "Wrong block replacement ~a" (block-label old))
 			(block-label new))))))
-	 (with-access::blockS old ((old-succs succs) (old-preds preds) mblock)
-	    ;; mark the replacement
-	    (set! mblock new)
+	 (with-access::blockS old ((old-succs succs) (old-preds preds) mblock gccnt)
+	    ;; remove "old" from all its successors's pred list
 	    (for-each (lambda (b)
-			 (with-access::blockS b (preds cnt)
-			    (set! cnt (-fx cnt 1))
+			 (with-access::blockS b (preds)
+			    (trace-item (format "replace-block.update #~a~a"
+					   (block-label b)
+					   (if (block-live? b) "+" "-")))
 			    (block-preds-update! b 
 			       (filter! (lambda (n) (not (eq? n old))) preds))))
 	       old-succs)
 	    (for-each (lambda (b)
-			 (with-access::blockS b (succs first)
-			    (set! succs (replace succs old new))
+			 (with-access::blockS b (succs first preds)
+			    (set! succs (list-replace succs old new))
+			    (bbv-gc-connect! b new)
 			    (for-each (lambda (ins)
 					 (cond
 					    ((rtl_ins-ifeq? ins)
@@ -213,14 +230,30 @@
 					    ((rtl_ins-switch? ins)
 					     (with-access::rtl_ins ins (fun)
 						(with-access::rtl_switch fun (labels)
-						   (set! labels (replace labels old new)))))))
+						   (set! labels (list-replace labels old new)))))))
 			       first)))
 	       old-preds)
-	    (with-access::blockS new ((npreds preds) cnt)
+	    (with-access::blockS new ((npreds preds))
 	       (block-preds-update! new
-		  (delete-duplicates! (append old-preds npreds) eq?)))
+		  (delete-duplicates (append old-preds npreds) eq?)))
+	    ;; mark the redirection
+	    (set! mblock new)
+	    (set! old-preds '())
+	    (set! old-succs '())
+	    (set! gccnt 0)
+	    (bbv-gc-redirect! old new)
 	    (when *bbv-debug*
-	       (assert-block new "replace-block!.replaced"))
+	       (assert-block old "replace-block!.old<")
+	       (assert-block new "replace-block!.new<"))
+	    (trace-item "after-merge new=#"(block-label new)
+	       " succs=" (map (lambda (s)
+				 (format "#~a~a" (block-label s)
+				    (if (block-live? s) "+" "-")))
+			    (block-succs new))
+	       " preds=" (map (lambda (s)
+				 (format "#~a~a" (block-label s)
+				    (if (block-live? s) "+" "-")))
+			    (block-preds new)))
 	    new))))
 
 ;*---------------------------------------------------------------------*/
@@ -274,18 +307,18 @@
       (with-access::rtl_ins/bbv ins (in)
 	 (filter-map (lambda (e)
 			(let ((reg (bbv-ctxentry-reg e)))
-			   (if (or (not (isa? reg rtl_reg/ra))
-				   (regset-member? reg in))
-			       (let ((aliases (filter (lambda (reg)
-							 (regset-member? reg in))
-						 (bbv-ctxentry-aliases e))))
-				  (if (=fx (length aliases)
-					 (length (bbv-ctxentry-aliases e)))
-				      e
-				      (begin
-					 (set! filtered #t)
-					 (duplicate::bbv-ctxentry e
-					    (aliases aliases)))))
+			   [assert (reg) (isa? reg rtl_reg/ra)]
+			   (if (regset-member? reg in)
+			       (if (every (lambda (reg)
+					     (regset-member? reg in))
+				      (bbv-ctxentry-aliases e))
+				   e
+				   (let ((aliases (filter (lambda (reg)
+							     (regset-member? reg in))
+						     (bbv-ctxentry-aliases e))))
+				      (set! filtered #t)
+				      (duplicate::bbv-ctxentry e
+					 (aliases aliases))))
 			       (begin
 				  (set! filtered #t)
 				  #f))))
@@ -302,18 +335,20 @@
 ;*---------------------------------------------------------------------*/
 (define (bbv-ctx-extend-live-out-regs ctx ins::rtl_ins/bbv)
    (with-access::rtl_ins/bbv ins (out)
-      (let ((entries (filter (lambda (e)
-				(regset-member? (bbv-ctxentry-reg e) out))
+      (let ((entries (filter-map (lambda (e)
+				    (when (regset-member? (bbv-ctxentry-reg e) out)
+				       (with-access::bbv-ctxentry e (aliases)
+					  (if (null? aliases)
+					      e
+					      (duplicate::bbv-ctxentry e
+						 (aliases (filter (lambda (r) (regset-member? r out)) aliases)))))))
 			(bbv-ctx-entries ctx))))
-	 (let ((nctx (if (and #f (=fx (length entries) (length (bbv-ctx-entries ctx))))
-			 ctx
-			 (duplicate::bbv-ctx ctx
-			    (entries entries)))))
-	    (regset-for-each (lambda (r)
-				(unless (bbv-ctx-get nctx r)
-				   (with-access::rtl_reg r (type)
-				      (set! nctx (extend-ctx nctx r
-						    (list type) #t)))))
+	 (let ((nctx (duplicate::bbv-ctx ctx
+			(entries entries))))
+	    (regset-for-each (lambda (reg)
+				[assert (reg) (isa? reg rtl_reg/ra)]
+				(unless (bbv-ctx-get nctx reg)
+				   (with-access::rtl_reg reg (type)
+				      (extend-ctx! nctx reg (list type) #t))))
 	       out)
 	    nctx))))
-

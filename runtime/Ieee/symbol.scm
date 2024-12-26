@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Sat Jul  4 15:05:26 1992                          */
-;*    Last change :  Sun Aug 25 09:19:14 2019 (serrano)                */
+;*    Last change :  Wed Sep 18 21:19:53 2024 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    6.4. Symbols (page 18, r4)                                       */
 ;*=====================================================================*/
@@ -13,6 +13,10 @@
 ;*---------------------------------------------------------------------*/
 (module __r4_symbols_6_4
 
+   (cond-expand
+      ((and (not bigloo-c) (not bigloo-jvm))
+       (include "Ieee/symbol-generic.sch")))
+   
    (import  __error
 	    __param)
    
@@ -40,47 +44,73 @@
 	    __bignum)
 
    (extern  (macro c-symbol?::bool (::obj) "SYMBOLP")
+	    (macro $symbol?::bool (::obj) "SYMBOLP")
 	    (c-string->symbol::symbol (::string) "string_to_symbol")
-	    (c-bstring->symbol::symbol (::bstring) "bstring_to_symbol")
+	    ($string->symbol::symbol (::string) "string_to_symbol")
+	    ($bstring->symbol::symbol (::bstring) "bstring_to_symbol")
 	    ($gensym::symbol (::obj) "bgl_gensym")
+	    (macro $symbol->string::bstring (::obj) "SYMBOL_TO_STRING")
 	    (macro c-symbol->string::bstring (::obj) "SYMBOL_TO_STRING")
+	    (macro $symbol-plist::obj (::obj) "GET_SYMBOL_PLIST")
 	    (macro c-symbol-plist::obj (::obj) "GET_SYMBOL_PLIST")
 	    (macro set-symbol-plist::obj (::obj ::obj) "SET_SYMBOL_PLIST")
-	    (symbol-exists?::bool (::string) "symbol_exists_p")
+	    ($symbol-exists?::bool (::string) "symbol_exists_p")
 	    
             (macro c-keyword?::bool (::obj) "KEYWORDP")
+            (macro $keyword?::bool (::obj) "KEYWORDP")
 	    (c-string->keyword::keyword (::string) "string_to_keyword")
-	    (c-bstring->keyword::keyword (::bstring) "bstring_to_keyword")
+	    ($string->keyword::keyword (::string) "string_to_keyword")
+	    ($bstring->keyword::keyword (::bstring) "bstring_to_keyword")
 	    (macro c-keyword->string::bstring (::keyword) "KEYWORD_TO_STRING")
+	    (macro $keyword->string::bstring (::keyword) "KEYWORD_TO_STRING")
 	    (macro c-keyword-plist::obj (::obj) "GET_KEYWORD_PLIST")
+	    (macro $keyword-plist::obj (::obj) "GET_KEYWORD_PLIST")
 	    (macro set-keyword-plist::obj (::obj ::obj) "SET_KEYWORD_PLIST")
 	    (macro cnst->integer::long (::obj) "CCNST"))
    
    (java    (class foreign
 	       (method static c-symbol?::bool (::obj)
 		       "SYMBOLP")
+	       (method static $symbol?::bool (::obj)
+		       "SYMBOLP")
 	       (method static c-string->symbol::symbol (::string)
 		       "string_to_symbol")
-	       (method static c-bstring->symbol::symbol (::bstring)
+	       (method static $string->symbol::symbol (::string)
+		       "string_to_symbol")
+	       (method static $symbol->string::bstring (::symbol)
+		       "SYMBOL_TO_STRING")
+	       (method static $bstring->symbol::symbol (::bstring)
 		       "string_to_symbol")
 	       (method static c-symbol->string::bstring (::symbol)
 		       "SYMBOL_TO_STRING")
+	       (method static $symbol->string::bstring (::symbol)
+		       "SYMBOL_TO_STRING")
 	       (method static c-symbol-plist::obj (::symbol)
+		       "GET_SYMBOL_PLIST")
+	       (method static $symbol-plist::obj (::symbol)
 		       "GET_SYMBOL_PLIST")
 	       (method static set-symbol-plist::obj (::symbol ::obj)
 		       "SET_SYMBOL_PLIST")
-	       (method static symbol-exists?::bool (::string)
+	       (method static $symbol-exists?::bool (::bstring)
 		       "symbol_exists_p")
 	       
 	       (method static c-keyword?::bool (::obj)
 		       "KEYWORDP")
+	       (method static $keyword?::bool (::obj)
+		       "KEYWORDP")
 	       (method static c-string->keyword::keyword (::string)
 		       "string_to_keyword")
-	       (method static c-bstring->keyword::keyword (::bstring)
+	       (method static $string->keyword::keyword (::string)
+		       "string_to_keyword")
+	       (method static $bstring->keyword::keyword (::bstring)
 		       "string_to_keyword")
 	       (method static c-keyword->string::bstring (::keyword)
 		       "KEYWORD_TO_STRING")
+	       (method static $keyword->string::bstring (::keyword)
+		       "KEYWORD_TO_STRING")
 	       (method static c-keyword-plist::obj (::keyword)
+		       "GET_KEYWORD_PLIST")
+	       (method static $keyword-plist::obj (::keyword)
 		       "GET_KEYWORD_PLIST")
 	       (method static set-keyword-plist::obj (::keyword ::obj)
 		       "SET_KEYWORD_PLIST")
@@ -88,6 +118,7 @@
 		       "CCNST")))
    
    (export  (inline symbol?::bool ::obj)
+	    (inline symbol-exists?::bool ::bstring)
 	    (inline symbol->string::bstring ::symbol)
 	    (inline symbol->string!::bstring ::symbol)
 	    (inline string->symbol::symbol ::bstring)
@@ -106,22 +137,27 @@
 	    (keyword->symbol::symbol ::keyword))
    
    (pragma  (c-symbol? (predicate-of symbol) no-cfa-top nesting fail-safe)
+	    ($symbol? (predicate-of symbol) no-cfa-top nesting fail-safe)
 	    (symbol? side-effect-free nesting fail-safe)
 	    (c-symbol->string args-safe fail-safe)
+	    ($symbol->string args-safe fail-safe)
 	    (c-symbol-plist args-safe)
+	    ($symbol-plist args-safe)
 	    (set-symbol-plist args-safe)
 	    (c-keyword->string args-safe fail-safe)
+	    ($keyword->string args-safe fail-safe)
 	    (c-keyword-plist args-safe)
+	    ($keyword-plist args-safe)
 	    (set-keyword-plist args-safe)
 	    (cnst->integer args-safe)
-	    (c-string->symbol no-cfa-top nesting fail-safe)
-	    (c-bstring->symbol no-cfa-top nesting fail-safe)
+	    ($bstring->symbol no-cfa-top nesting fail-safe)
 	    (string->symbol no-cfa-top nesting fail-safe)
 	    (string->symbol-ci no-cfa-top nesting fail-safe)
 	    (getprop side-effect-free nesting fail-safe)
 	    (c-keyword? (predicate-of keyword) no-cfa-top nesting fail-safe)
+	    ($keyword? (predicate-of keyword) no-cfa-top nesting fail-safe)
 	    (keyword? side-effect-free nesting fail-safe)
-	    (c-string->keyword no-cfa-top nesting fail-safe)
+	    ($bstring->keyword no-cfa-top nesting fail-safe)
 	    (string->keyword no-cfa-top nesting fail-safe)
 	    (gensym fail-safe)))
 
@@ -147,13 +183,17 @@
 ;*    string->symbol ...                                               */
 ;*---------------------------------------------------------------------*/
 (define-inline (string->symbol string)
-   (c-bstring->symbol string))
+   (cond-expand
+      ((or bigloo-c bigloo-jvm)
+       ($bstring->symbol string))
+      (else
+       ($$bstring->symbol string))))
 
 ;*---------------------------------------------------------------------*/
 ;*    string->symbol-ci ...                                            */
 ;*---------------------------------------------------------------------*/
 (define (string->symbol-ci string)
-   (c-bstring->symbol (string-upcase string)))
+   (string->symbol (string-upcase string)))
 
 ;*---------------------------------------------------------------------*/
 ;*    symbol-append ...                                                */
@@ -172,6 +212,12 @@
 ;*    *gensym-counter* ...                                             */
 ;*---------------------------------------------------------------------*/
 (define *gensym-counter* 999)
+
+;*---------------------------------------------------------------------*/
+;*    symbol-exists? ...                                               */
+;*---------------------------------------------------------------------*/
+(define-inline (symbol-exists? sym)
+   ($symbol-exists? sym))
 
 ;*---------------------------------------------------------------------*/
 ;*    gensym ...                                                       */
@@ -193,8 +239,8 @@
 			(else (error "gensym" "Illegal argument" arg)))))
 	  (let loop ()
 	     (set! *gensym-counter* (+fx *gensym-counter* 1))
-	     (let ((name (string-append string
-					(integer->string *gensym-counter*))))
+	     (let* ((n (integer->string *gensym-counter*))
+		    (name (string-append string n)))
 		(if (not (symbol-exists? name))
 		    (string->symbol name)
 		    (loop))))))))
@@ -291,7 +337,11 @@
 ;*    string->keyword ...                                              */
 ;*---------------------------------------------------------------------*/
 (define-inline (string->keyword string)
-   (c-string->keyword string))
+   (cond-expand
+      ((or bigloo-c bigloo-jvm)
+       ($bstring->keyword string))
+      (else
+       ($$bstring->keyword string))))
 
 ;*---------------------------------------------------------------------*/
 ;*    symbol->keyword ...                                              */

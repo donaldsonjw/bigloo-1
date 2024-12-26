@@ -3,10 +3,10 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Jun 27 10:33:17 1996                          */
-;*    Last change :  Sat Sep  4 15:13:38 2021 (serrano)                */
-;*    Copyright   :  1996-2021 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Tue Dec 10 08:55:59 2024 (serrano)                */
+;*    Copyright   :  1996-2024 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
-;*    We make the obvious type election (taking care of tvectors).     */
+;*    Type election (taking care of tvectors).                         */
 ;*=====================================================================*/
 
 ;*---------------------------------------------------------------------*/
@@ -21,7 +21,9 @@
 	    tools_shape
 	    tools_error
 	    engine_param
+	    backend_backend
 	    ast_var
+	    ast_env
 	    ast_node
 	    cfa_info
 	    cfa_info2
@@ -57,15 +59,30 @@
 	 ((intern-sfun/Cinfo? fun)
 	  ;; if it is not an `intern-sfun/Cinfo', it means that the
 	  ;; procedure is unreachable and then we can ignore it.
-	  (with-access::intern-sfun/Cinfo fun (body args approx)
+	  (with-access::intern-sfun/Cinfo fun (body args approx the-closure-global strength)
 	     ;; the formals
-	     (for-each (lambda (var)
-			  (trace (cfa 3) "  formal " (shape var)
-			     " " (typeof (local-value var)) #\Newline)
-			  (type-variable! (local-value var) var))
-		       args)
+	     (trace (cfa 3) "  formal " (shape var)
+		" " (typeof (local-value var)) #\Newline)
+	     (if (unoptimized-closure? fun)
+		 ;; unoptimized closures have to use polymorphic arguments
+		 (for-each (lambda (var)
+			      ;; force an obj type for this formal argument
+			      (variable-type-set! var *obj*))
+		    (cdr args))
+		 ;; optimized closures and regular functions may have
+		 ;; specialized arguments
+		 (for-each (lambda (var)
+			      (trace (cfa 3) "  formal " (shape var)
+				 " " (typeof (local-value var)) #\Newline)
+			      (type-variable! (local-value var) var))
+		    args))
 	     ;; and the function result
-	     (set-variable-type! var (get-approx-type approx var))
+	     (with-access::backend (the-backend) (typed-closures)
+		(if (or typed-closures
+			(not (isa? the-closure-global global))
+			(eq? strength 'elight))
+		    (set-variable-type! var (get-approx-type approx var))
+		    (variable-type-set! var *obj*)))
 	     (shrink! fun)
 	     ;; the body
 	     (set! body (type-node! body))))
@@ -89,11 +106,11 @@
 ;*    get-approx-type ...                                              */
 ;*---------------------------------------------------------------------*/
 (define (get-approx-type approx node)
-   (let ((type (approx-type approx))
+   (let ((ty (approx-type approx))
 	 (allocs (approx-allocs approx)))
       (cond
 	 ((=fx (set-length allocs) 0)
-	  type)
+	  ty)
 	 ((approx-top? approx)
 	  *obj*)
 	 ((set-every make-vector-app? allocs)
@@ -104,13 +121,13 @@
 		 (tv (type-tvector item-type)))
 	     (cond
 		((type? tv) tv)
-		((eq? type *_*) *vector*)
-		(else type))))
+		((eq? ty *_*) *vector*)
+		(else ty))))
 	 ((set-every valloc/Cinfo+optim? allocs)
 	  (if (not (tvector-optimization?))
-	      (if (eq? type *_*)
+	      (if (eq? ty *_*)
 		  *vector*
-		  type)
+		  ty)
 	      (let* ((app (set-head allocs))
 		     (tv-type (get-vector-item-type app))
 		     (value-approx (valloc/Cinfo+optim-value-approx app))
@@ -118,18 +135,30 @@
 		     (tv (type-tvector item-type)))
 		 (cond
 		    ((type? tv) tv)
-		    ((eq? type *_*) *vector*)
-		    (else type)))))
+		    ((eq? ty *_*) *vector*)
+		    (else ty)))))
+	 ((set-every (lambda (a)
+			(when (isa? a make-procedure-app)
+			   (with-access::make-procedure-app a (T X)
+			      (and T (not X)))))
+	     allocs)
+	  *procedure-l*)
+	 ((set-every (lambda (a)
+			(when (isa? a make-procedure-app)
+			   (with-access::make-procedure-app a (T X)
+			      (and T X))))
+	     allocs)
+	  *procedure-el*)
 	 (else
-	  type))))
+	  ty))))
 	 
 ;*---------------------------------------------------------------------*/
 ;*    type-variable! ...                                               */
 ;*---------------------------------------------------------------------*/
 (define-generic (type-variable! value::value variable::variable)
-   (let ((type (variable-type variable)))
+   (let ((ty (variable-type variable)))
       (cond
-	 ((not (type? type))
+	 ((not (type? ty))
 	  (set-variable-type! variable (get-default-type)))
 	 ((and (eq? type *_*) (not *optim-cfa?*))
 	  (set-variable-type! variable (get-default-type))))))
@@ -139,10 +168,10 @@
 ;*---------------------------------------------------------------------*/
 (define-method (type-variable! value::svar/Cinfo variable)
    (with-access::svar/Cinfo value (approx)
-      (let ((typ (get-approx-type approx value)))
-	 (trace (cfa 4) "   type-variable " (shape variable) " -> " (shape typ)
+      (let ((ty (get-approx-type approx value)))
+	 (trace (cfa 4) "   type-variable " (shape variable) " -> " (shape ty)
 	    #\Newline)
-	 (set-variable-type! variable typ))))
+	 (set-variable-type! variable ty))))
    
 ;*---------------------------------------------------------------------*/
 ;*    type-variable! ::scnst ...                                       */
@@ -195,9 +224,36 @@
 	      ;; mandatory that there type is checkable and then, it means
 	      ;; that there type is a Bigloo type.
 	      (variable-type-set! variable *obj*)
-	      (variable-type-set! variable ntype)))
+	      (variable-type-set! variable (mark-null-type-ctor! ntype))))
 	 ((and (eq? otype *vector*) (tvec? ntype))
-	  (variable-type-set! variable ntype)))))
+	  (variable-type-set! variable (mark-null-type-ctor! ntype)))
+	 ((and (eq? otype *procedure*) (eq? ntype *procedure-l*))
+	  (variable-type-set! variable type)))))
+
+;*---------------------------------------------------------------------*/
+;*    mark-null-type-ctor! ...                                         */
+;*    -------------------------------------------------------------    */
+;*    This function has been added in July 2024, it complements the    */
+;*    extension of the subtype parser (see, Module/type.scm and        */
+;*    ../runtime/Llib/type.scm).                                       */
+;*    -------------------------------------------------------------    */
+;*    When a global variable is assigned a precise type (i.e., not     */
+;*    *obj*) it has to use a specific null value when declared.        */
+;*    Which null value to use is (optionally) declared in the type     */
+;*    itself as the mean of a global variable. This function           */
+;*    increments the use counter of that variable.                     */
+;*---------------------------------------------------------------------*/
+(define (mark-null-type-ctor! type)
+   (with-access::type type (null)
+      (when (symbol? null)
+	 (set! null (find-global null))
+	 (unless null
+	    (internal-error "cfg:null-type!"
+	       "Cannot find null-type variable" null)))
+      (when (isa? null global)
+	 (with-access::global null (occurrence)
+	    (set! occurrence (+fx 1 occurrence)))))
+   type)
 
 ;*---------------------------------------------------------------------*/
 ;*    type-node! ...                                                   */
@@ -228,7 +284,9 @@
       (or (not (bigloo-type? vtype))
 	  (eq? ntype *obj*)
 	  (or (eq? vtype *pair*) (eq? vtype *epair*) )
-	  (and (tclass? vtype) (tclass? ntype) (type-subclass? vtype ntype))))
+	  (and (tclass? vtype) (tclass? ntype) (type-subclass? vtype ntype))
+	  (eq? vtype *procedure-l*)
+	  (eq? vtype *procedure-el*)))
    
    (with-access::var node (variable type)
       (when (and (global? variable) (eq? (global-import variable) 'static))
@@ -418,11 +476,16 @@
 		    (set! type *obj*)
 		    node)
 		 (begin
-		    ;; check type-closures! (loc2glo.scm), non optimized closures
-		    ;; must return bigloo boxed types
-		    (if (memq (funcall-strength node) '(light elight))
-			(set! type typ)
-			(set! type (get-bigloo-type typ)))
+		    ;; check type-closures! (loc2glo.scm), non optimized
+		    ;; closures  must return bigloo boxed types
+		    (case (funcall-strength node)
+		       ((elight)
+			(set! type typ))
+		       ((light)
+			(with-access::backend (the-backend) (typed-closures)
+			   (set! type (if typed-closures typ *obj*))))
+		       (else
+			(set! type (get-bigloo-type typ))))
 		    node)))
 	  (begin
 	     (set! type *obj*)
@@ -452,12 +515,27 @@
 ;*---------------------------------------------------------------------*/
 (define-method (type-node! node::vref)
    (call-next-method)
-   (with-access::vref node (ftype type)
-      (when (eq? ftype *_*)
-	 (set! ftype *obj*))
-      (set! type ftype))
-   node)
-      
+   (with-access::vref node (ftype type vtype)
+      (cond
+	 ((tvec? vtype)
+	  node)
+	 ((eq? ftype *_*)
+	  (set! ftype *obj*)
+	  (set! type *obj*)
+	  node)
+	 ((backend-strict-type-cast (the-backend))
+	  (let ((ctype ftype))
+	     (set! type *obj*)
+	     (set! ftype *obj*)
+	     (if (eq? ctype *obj*)
+		 node
+		 (instantiate::cast
+		    (type ctype)
+		    (arg node)))))
+	 (else
+	  (set! type ftype)
+	  node))))
+
 ;*---------------------------------------------------------------------*/
 ;*    type-node! ::vset! ...                                           */
 ;*---------------------------------------------------------------------*/

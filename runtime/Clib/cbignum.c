@@ -3,8 +3,8 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  JosÃ© Romildo Malaquias                           */
 /*    Creation    :  Fri Nov 10 11:51:17 2006                          */
-/*    Last change :  Wed Mar 15 18:04:19 2023 (serrano)                */
-/*    Copyright   :  2003-23 Manuel Serrano                            */
+/*    Last change :  Thu Dec 12 09:52:45 2024 (serrano)                */
+/*    Copyright   :  2003-24 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    C implementation of bignum                                       */
 /*=====================================================================*/
@@ -33,7 +33,7 @@ bgl_init_bignum() {
 #endif
 }
 
-#if (BGL_HAVE_GMP)   
+#if (BGL_HAVE_GMP && !BGL_BOOT)   
 
 /* field access macros.  */
 #define SIZ(x) ((x)->_mp_size)
@@ -61,7 +61,7 @@ static obj_t
 make_bignum(size_t sz) {
    obj_t o = GC_MALLOC_ATOMIC(BIGNUM_ALLOC_SIZE(sz));
    
-   o->bignum.header = MAKE_HEADER(BIGNUM_TYPE, 0);
+   o->bignum.header = BGL_MAKE_HEADER(BIGNUM_TYPE, 0);
    o->bignum.mpz._mp_d = (mp_limb_t *)&(o->bignum.mp_d);
    o->bignum.mpz._mp_alloc = sz;
 
@@ -70,7 +70,7 @@ make_bignum(size_t sz) {
 
 #define MAKE_STACK_BIGNUM(o, sz) \
    (o = alloca(BIGNUM_ALLOC_SIZE(sz)), \
-      o->bignum.header = MAKE_HEADER(BIGNUM_TYPE, 0), \
+      o->bignum.header = BGL_MAKE_HEADER(BIGNUM_TYPE, 0), \
       o->bignum.mpz._mp_d = (mp_limb_t *)&(o->bignum.mp_d), \
       o->bignum.mpz._mp_alloc = sz, \
     BREF(o))
@@ -846,10 +846,11 @@ obj_t
 bgl_safe_bignum_to_fixnum(obj_t bx) {
    size_t bs = mpz_sizeinbase(&(BIGNUM(bx).mpz), 2);
 
-   if (bs < BGL_INT_BIT_SIZE)
+   if (bs < BGL_INT_BIT_SIZE) {
       return BINT(bgl_bignum_to_long(bx));
-   else
+   } else {
       return bx;
+   }
 }
 
 /*---------------------------------------------------------------------*/
@@ -858,9 +859,14 @@ bgl_safe_bignum_to_fixnum(obj_t bx) {
 /*---------------------------------------------------------------------*/
 BGL_RUNTIME_DEF obj_t
 bgl_safe_plus_fx(long x, long y) {
+#if BGL_HAVE_OVERFLOW
+   long z;
+   if (__builtin_saddl_overflow(x, y, &z))
+#else   
    long z = x + y;
    if ((x & C_LONG_SIGN_BIT) == (y & C_LONG_SIGN_BIT) &&
        (z & C_LONG_SIGN_BIT) != (x & C_LONG_SIGN_BIT))
+#endif   
       return bgl_bignum_add(bgl_long_to_bignum(x), bgl_long_to_bignum(y));
    else
       return BINT(z);
@@ -872,10 +878,14 @@ bgl_safe_plus_fx(long x, long y) {
 /*---------------------------------------------------------------------*/
 BGL_RUNTIME_DEF obj_t
 bgl_safe_minus_fx(long x, long y) {
+#if BGL_HAVE_OVERFLOW
+   long z;
+   if (__builtin_ssubl_overflow(x, y, &z))
+#else   
    long z = x - y;
-
    if ((x & C_LONG_SIGN_BIT) != (y & C_LONG_SIGN_BIT) &&
        (z & C_LONG_SIGN_BIT) != (x & C_LONG_SIGN_BIT))
+#endif
       return bgl_bignum_sub(bgl_long_to_bignum(x), bgl_long_to_bignum(y));
    else
       return BINT(z);
@@ -887,6 +897,14 @@ bgl_safe_minus_fx(long x, long y) {
 /*---------------------------------------------------------------------*/
 BGL_RUNTIME_DEF obj_t
 bgl_safe_mul_fx(long x, long y) {
+#if BGL_HAVE_OVERFLOW
+      long z;
+      if (__builtin_smull_overflow(x, y, &z))
+	 return bgl_bignum_mul(bgl_long_to_bignum(x),
+			       bgl_long_to_bignum(y));
+      else
+	 return BINT(z);
+#else   
    if (!y || !x)
       return BINT(0);
    else {
@@ -899,6 +917,7 @@ bgl_safe_mul_fx(long x, long y) {
 	 return bgl_bignum_mul(bgl_long_to_bignum(x),
 			       bgl_long_to_bignum(y));
    }
+#endif   
 }
 
 /*---------------------------------------------------------------------*/
@@ -910,11 +929,7 @@ bgl_safe_quotient_fx(long x, long y) {
    if (x == BGL_LONG_MIN && y == -1) {
       return bgl_bignum_div(bgl_long_to_bignum(x), bgl_long_to_bignum(y));
    } else {
-#if (!BGL_NAN_TAGGING)
       return BINT(x / y);
-#else
-      return BINT(x / y);
-#endif
    }
 }
 
@@ -924,10 +939,15 @@ bgl_safe_quotient_fx(long x, long y) {
 /*---------------------------------------------------------------------*/
 BGL_RUNTIME_DEF obj_t
 bgl_safe_plus_elong(long x, long y) {
+#if BGL_HAVE_OVERFLOW
+   long z;
+   if (__builtin_saddl_overflow(x, y, &z))
+#else   
    long z = x + y;
 
    if ((x & C_ELONG_SIGN_BIT) == (y & C_ELONG_SIGN_BIT) &&
        (z & C_ELONG_SIGN_BIT) != (x & C_ELONG_SIGN_BIT))
+#endif      
       return bgl_bignum_add(bgl_long_to_bignum(x), bgl_long_to_bignum(y));
    else
       return make_belong(z);
@@ -939,10 +959,15 @@ bgl_safe_plus_elong(long x, long y) {
 /*---------------------------------------------------------------------*/
 BGL_RUNTIME_DEF obj_t
 bgl_safe_minus_elong(long x, long y) {
+#if BGL_HAVE_OVERFLOW
+   long z;
+   if (__builtin_ssubl_overflow(x, y, &z))
+#else   
    long z = x - y;
 
    if ((x & C_ELONG_SIGN_BIT) != (y & C_ELONG_SIGN_BIT) &&
        (z & C_ELONG_SIGN_BIT) != (x & C_ELONG_SIGN_BIT))
+#endif      
       return bgl_bignum_sub(bgl_long_to_bignum(x), bgl_long_to_bignum(y));
    else
       return make_belong(z);
@@ -954,6 +979,13 @@ bgl_safe_minus_elong(long x, long y) {
 /*---------------------------------------------------------------------*/
 BGL_RUNTIME_DEF obj_t
 bgl_safe_mul_elong(long x, long y) {
+#if BGL_HAVE_OVERFLOW
+   long z;
+   if (__builtin_smull_overflow(x, y, &z))
+      return bgl_bignum_mul(bgl_long_to_bignum(x), bgl_long_to_bignum(y));
+   else
+      return make_belong(z);
+#else   
    if (!y)
       return bgl_belongzero;
    else {
@@ -964,6 +996,7 @@ bgl_safe_mul_elong(long x, long y) {
       else
 	 return bgl_bignum_mul(bgl_long_to_bignum(x), bgl_long_to_bignum(y));
    }
+#endif   
 }
 
 /*---------------------------------------------------------------------*/
@@ -1073,18 +1106,6 @@ BGL_RUNTIME_DEF void
 bgl_seed_rand(unsigned long int seed) {
    srand(seed);
    gmp_randseed_ui(gmp_random_state, seed);
-}
-
-/*---------------------------------------------------------------------*/
-/*    obj_t                                                            */
-/*    BGl_modulezd2initializa7ationz75zz__bignumz00 ...                */
-/*    -------------------------------------------------------------    */
-/*    When the GMP support is enabled, we have to replace the          */
-/*    initialization of the Bigloo module with a fake definition...    */
-/*---------------------------------------------------------------------*/
-BGL_RUNTIME_DEF obj_t
-BGl_modulezd2initializa7ationz75zz__bignumz00(long BgL_checksumz00_4789, char *BgL_fromz00_4790) {
-   return BUNSPEC;
 }
 
 /*---------------------------------------------------------------------*/
@@ -1232,7 +1253,7 @@ obj_t
 bgl_make_bignum(obj_t v) {
    obj_t o = GC_MALLOC(BIGNUM_SIZE);
    
-   o->bignum.header = MAKE_HEADER(BIGNUM_TYPE, 0);
+   o->bignum.header = BGL_MAKE_HEADER(BIGNUM_TYPE, 0);
    o->bignum.u16vect = v;
 
    return BREF(o);

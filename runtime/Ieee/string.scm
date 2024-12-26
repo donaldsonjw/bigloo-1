@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Mon Mar 20 19:17:18 1995                          */
-;*    Last change :  Fri Jun 14 14:30:35 2019 (serrano)                */
+;*    Last change :  Thu Jul 18 11:12:21 2024 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    6.7. Strings (page 25, r4)                                       */
 ;*    -------------------------------------------------------------    */
@@ -16,6 +16,10 @@
 ;*    The module                                                       */
 ;*---------------------------------------------------------------------*/
 (module __r4_strings_6_7
+   
+   (cond-expand
+      ((and (not bigloo-c) (not bigloo-jvm))
+       (include "Ieee/string-generic.sch")))
    
    (import  __error
 	    __param)
@@ -353,6 +357,8 @@
        (let ((l1 (string-length string1)))
 	  (when (=fx l1 (string-length string2))
 	     (=fx ($memcmp string1 string2 l1) 0))))
+      (bigloo-jvm
+       ($string=? string1 string2))
       (else
        ($string=? string1 string2))))
 
@@ -381,8 +387,8 @@
 ;*---------------------------------------------------------------------*/
 (define-inline (substring-ci-at? string1 string2 off #!optional (len -1))
    (if (=fx len -1)
-       ($prefix-ci-at? string1 string2 off)
-       ($substring-ci-at? string1 string2 off len)))
+	   ($prefix-ci-at? string1 string2 off)
+	   ($substring-ci-at? string1 string2 off len)))
 
 ;*---------------------------------------------------------------------*/
 ;*    @deffn empty-string?@ ...                                        */

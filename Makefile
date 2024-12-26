@@ -3,8 +3,8 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Wed Jan 14 13:40:15 1998                          */
-#*    Last change :  Tue Jul 11 15:27:19 2023 (serrano)                */
-#*    Copyright   :  1998-2023 Manuel Serrano, see LICENSE file        */
+#*    Last change :  Wed Nov 27 11:39:02 2024 (serrano)                */
+#*    Copyright   :  1998-2024 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    This Makefile *requires* GNU-Make.                               */
 #*    -------------------------------------------------------------    */
@@ -102,6 +102,7 @@ LOGMSG		= ""
 SUDO		= sudo
 
 BOOTCAPI	= no
+HOSTBOOTMAKEOPT	= 
 
 #*---------------------------------------------------------------------*/
 #*    The directory that compose a version                             */
@@ -179,6 +180,15 @@ checkconf:
 	fi
 
 boot: boot-c
+	if [ "$(JVMBACKEND)" = "yes" ]; then \
+	  $(MAKE) boot-jvm; \
+        fi
+	$(MAKE) boot-bde
+	$(MAKE) boot-api
+	if [ "$(ENABLE_BGLPKG)" = "yes" ]; then \
+	  $(MAKE) boot-bglpkg; \
+        fi
+	@ echo "\e[1;34mboot\e[0m done..."
 
 boot-c: checkgmake
 	if [ "$(GMPCUSTOM)" = "yes" ]; then \
@@ -205,24 +215,30 @@ boot-c: checkgmake
 	if [ -x $(BGLBUILDBINDIR)/bigloo ]; then \
 	  $(MAKE) -C runtime .afile && \
 	  $(MAKE) -C runtime heap && \
+          $(MAKE) boot-touch-specific && \
 	  $(MAKE) -C runtime boot && \
-	  $(MAKE) -C comptime bigloo && \
-	  $(MAKE) -C comptime doboot; \
+          $(MAKE) boot-touch-specific && \
+	  $(MAKE) -C runtime lib && $(MAKE) -C runtime lib_u && \
+	  $(MAKE) -C comptime bigloo && $(MAKE) -C comptime boot; \
 	else \
 	  $(MAKE) -C runtime boot && \
 	  $(MAKE) -C comptime boot && \
 	  $(MAKE) -C runtime heap; \
 	fi
-	if [ "$(JVMBACKEND)" = "yes" ]; then \
-	  $(MAKE) boot-jvm; \
-        fi
-	$(MAKE) boot-bde
-	$(MAKE) boot-api
-	if [ "$(ENABLE_BGLPKG)" = "yes" ]; then \
-	  $(MAKE) boot-bglpkg; \
-        fi
-	@ echo "Boot done..."
-	@ echo "-------------------------------"
+	# touch the generic Scheme source files that must be
+	# recompiled with the configured options (e.g., gmp or pcre2)
+	$(MAKE) boot-touch-specific
+	$(MAKE) -C runtime lib && $(MAKE) -C runtime lib_u
+
+# This touches the runtime file that depends on some platform
+# configurations and that needs to be re-compiled because
+# the shipped intermediate C file use a generic implementation
+# that is not compatible with the specific autoconfiguration versions
+.PHONY: boot-touch-specific
+boot-touch-specific:
+	touch runtime/Eval/evprimop.scm
+	touch runtime/Unsafe/regexp.scm
+	touch runtime/Ieee/fixnum.scm runtime/Ieee/number.scm runtime/Unsafe/bignumber.scm runtime/Llib/os.scm runtime/Unsafe/rsa.scm runtime/Clib/cbignum.c runtime/Clib/cmain.c
 
 boot-jvm: checkgmake
 	$(MAKE) -C runtime boot-jvm
@@ -251,8 +267,7 @@ cross-rts: checkgmake
             $(MAKE) -C runtime boot-jvm); \
         fi
 	$(MAKE) -C api boot)
-	@ echo "CROSS-RTS done..."
-	@ echo "-------------------------------"
+	@ echo "\e[1;34mcross-rts\e[0m done..."
 
 #*---------------------------------------------------------------------*/
 #*    manuals                                                          */
@@ -320,17 +335,15 @@ dohostboot:
 	$(MAKE) -C comptime -i touchall
 	$(MAKE) -C comptime hostboot BBFLAGS="-w -unsafeh"
 	$(MAKE) -C runtime heap-c BIGLOO=$(BOOTBINDIR)/bigloo
-	$(MAKE) -C comptime -i touchall
-	$(MAKE) -C comptime BIGLOO=$(BOOTBINDIR)/bigloo
+	$(MAKE) -C comptime $(HOSTBOOTMAKEOPT) -i touchall
+	$(MAKE) -C comptime $(HOSTBOOTMAKEOPT) BIGLOO=$(BOOTBINDIR)/bigloo
 	$(MAKE) -C runtime clean-quick
-	$(MAKE) -C runtime heap libs BIGLOO=$(BOOTBINDIR)/bigloo
+	$(MAKE) -C runtime $(HOSTBOOTMAKEOPT) heap libs BIGLOO=$(BOOTBINDIR)/bigloo
 	$(MAKE) -C bde clean boot BIGLOO=$(BOOTBINDIR)/bigloo
 	$(MAKE) boot-bde BIGLOO=$(BOOTBINDIR)/bigloo
 	$(MAKE) -C api clean-quick BIGLOO=$(BOOTBINDIR)/bigloo
-	$(MAKE) boot-api BIGLOO=$(BOOTBINDIR)/bigloo
-	$(MAKE) fullbootstrap-sans-configure BGLBUILDBINDIR=$(BOOTBINDIR)
-	@ echo "hostboot done..."
-	@ echo "-------------------------------"
+	$(MAKE) $(HOSTBOOTMAKEOPT) fullbootstrap-sans-configure BGLBUILDBINDIR=$(BOOTBINDIR)
+	@ echo "\e[1;34mhostboot\e[0m done..."
 
 #*---------------------------------------------------------------------*/
 #*    compile-bee                                                      */

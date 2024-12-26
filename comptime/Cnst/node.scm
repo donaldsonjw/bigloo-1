@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Mon Feb  6 14:08:40 1995                          */
-;*    Last change :  Thu Nov  3 11:44:41 2022 (serrano)                */
-;*    Copyright   :  1995-2022 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Mon Sep 23 09:25:09 2024 (serrano)                */
+;*    Copyright   :  1995-2024 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The constant compilation (of the kwoted forms and                */
 ;*    `make-??-procedure' calls).                                      */
@@ -26,6 +26,7 @@
 	    ast_var
 	    ast_node
 	    ast_env
+	    backend_backend
 	    cnst_cache
 	    cnst_alloc)
    (export  (generic cnst!::node ::node)
@@ -153,7 +154,7 @@
 ;*---------------------------------------------------------------------*/
 (define-method (cnst! node::cast)
    (with-access::cast node (arg)
-      (cnst! arg)
+      (set! arg (cnst! arg))
       node))
 
 ;*---------------------------------------------------------------------*/
@@ -339,6 +340,12 @@
 		((eq? fun *double->real*)
 		 (if (real? actual-value)
 		     (cnst-alloc-real actual-value loc)
+		     node))
+		((and (eq? fun *long->bint*)
+		      (with-access::backend (the-backend) (boxed-fixnums)
+			 boxed-fixnums))
+		 (if (fixnum? actual-value)
+		     (cnst-alloc-integer actual-value loc)
 		     node))
 		((eq? fun *elong->belong*)
 		 (if (elong? actual-value)

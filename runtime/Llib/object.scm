@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Apr 25 14:20:42 1996                          */
-;*    Last change :  Fri Jan 28 08:32:42 2022 (serrano)                */
+;*    Last change :  Sun Nov 17 10:47:03 2024 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    The `object' library                                             */
 ;*    -------------------------------------------------------------    */
@@ -49,6 +49,10 @@
 
    (extern  (macro $as-object::object (::obj)
 		   "(BgL_objectz00_bglt)")
+	    (macro $as-vector::vector (::obj)
+		   "")
+	    (macro $as-class::class (::obj)
+		   "")
 	    (macro $object-widening::obj (::object)
 		   "BGL_OBJECT_WIDENING")
 	    (macro $object-widening-set!::obj (::object ::obj)
@@ -149,6 +153,10 @@
 		  "OBJECT_TYPE")
 	       (method static $as-object::object (::obj)
 		  "BGL_AS_OBJECT")
+	       (method static $as-vector::vector (::obj)
+		   "BGL_AS_VECTOR")
+	       (method static $as-class::class (::obj)
+		  "BGL_AS_CLASS")
 	       (method static $object-widening::obj (::object)
 		  "BGL_OBJECT_WIDENING")
 	       (method static $object-widening-set!::obj (::object ::obj)
@@ -882,7 +890,7 @@
 ;*    object-class ...                                                 */
 ;*---------------------------------------------------------------------*/
 (define-inline (object-class object::object)
-   (vector-ref-ur *classes*
+   (vector-ref-ur ($as-vector *classes*)
       (-fx (object-class-num object) %object-type-number)))
 
 ;*---------------------------------------------------------------------*/
@@ -1353,9 +1361,10 @@
 (define-inline (%isa32-object/cdepth? obj class cdepth)
    (let ((oclass (object-class obj)))
       (or (eq? class oclass)
-	  (let ((odepth ($class-depth oclass)))
+	  (let ((odepth ($class-depth ($as-class oclass))))
 	     (and (<fx cdepth odepth)
-		  (eq? ($class-ancestors-ref oclass cdepth) class))))))
+		  (eq? ($class-ancestors-ref ($as-class oclass) cdepth)
+		     class))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    %isa64-object/cdepth? ...                                        */
@@ -1453,12 +1462,13 @@
       (display class-name port)
       (if (nil? obj)
 	  (display " nil|" port)
-	  (let loop ((i 0))
-	     (if (=fx i len)
-		 (display #\| port)
-		 (begin
-		    (class-field-write/display (vector-ref-ur fields i))
-		    (loop (+fx i 1))))))))
+	  (display " ....|" port))))
+;* 	  (let loop ((i 0))                                            */
+;* 	     (if (=fx i len)                                           */
+;* 		 (display #\| port)                                    */
+;* 		 (begin                                                */
+;* 		    (class-field-write/display (vector-ref-ur fields i)) */
+;* 		    (loop (+fx i 1))))))))                             */
 
 ;*---------------------------------------------------------------------*/
 ;*    object-equal? ...                                                */

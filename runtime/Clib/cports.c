@@ -3,7 +3,7 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Thu Jul 23 15:34:53 1992                          */
-/*    Last change :  Fri Dec  8 13:29:20 2023 (serrano)                */
+/*    Last change :  Fri Nov 15 07:19:10 2024 (serrano)                */
 /*    -------------------------------------------------------------    */
 /*    Input ports handling                                             */
 /*=====================================================================*/
@@ -444,7 +444,6 @@ bgl_proc_read(obj_t port, char *b, long l) {
 static long
 bgl_input_mmap_read(obj_t port, char *ptr, long sz) {
 #if HAVE_MMAP
-#define INPUT_MMAP_PORT(o) CREF(o)->input_mmap_port
    obj_t mm = PORT_MMAP(port);
    
    long available = INPUT_MMAP_PORT(port).end - INPUT_MMAP_PORT(port).offset;
@@ -473,13 +472,15 @@ bgl_input_mmap_read(obj_t port, char *ptr, long sz) {
 /*    bgl_input_mmap_seek ...                                          */
 /*---------------------------------------------------------------------*/
 static void
-bgl_input_mmap_seek(obj_t port, long pos) {
-   if (pos >= 0 && pos < BGL_INPUT_PORT_BUFSIZ(port)) {
-      INPUT_PORT(port).filepos = pos;
-      INPUT_PORT(port).matchstart = pos;
-      INPUT_PORT(port).matchstop = pos;
-      INPUT_PORT(port).forward = pos;
-   } else if (pos == BGL_INPUT_PORT_BUFSIZ(port)) {
+bgl_input_mmap_seek(obj_t port, long pos) { 
+   if (pos >= 0 && pos < INPUT_PORT(port).length) {
+      INPUT_PORT(port).filepos = INPUT_MMAP_PORT(port).start + pos;
+      INPUT_MMAP_PORT(port).offset = INPUT_MMAP_PORT(port).start + pos;
+      INPUT_PORT(port).matchstart = 0;
+      INPUT_PORT(port).matchstop = 0;
+      INPUT_PORT(port).forward = 0;
+      INPUT_PORT(port).bufpos = 0;
+   } else if (pos == INPUT_PORT(port).length) {
       INPUT_PORT(port).eof = 1;
    } else {
       C_SYSTEM_FAILURE(BGL_IO_PORT_ERROR,
@@ -495,14 +496,14 @@ bgl_input_mmap_seek(obj_t port, long pos) {
 /*---------------------------------------------------------------------*/
 #if (BGL_HAVE_FCNTL)
 static void
-timeout_set_port_blocking(char *fun, int fd, int bool) {
+timeout_set_port_blocking(char *fun, int fd, int flag) {
    int val;
 
    if ((val = fcntl(fd, F_GETFL, 0)) < 0) {
       C_SYSTEM_FAILURE(BGL_IO_ERROR, fun, strerror(errno), BINT(fd));
    }
 
-   if (!bool) {
+   if (!flag) {
       val |= O_NONBLOCK;
    } else {
       val &= ~O_NONBLOCK;
@@ -984,7 +985,7 @@ bgl_make_output_port(obj_t name,
    new_output_port = GC_MALLOC(OUTPUT_PORT_SIZE);
    
    new_output_port->output_port.port.header =
-      MAKE_HEADER(OUTPUT_PORT_TYPE, 0);
+      BGL_MAKE_HEADER(OUTPUT_PORT_TYPE, 0);
    
    new_output_port->port.name = name;
    new_output_port->port.stream = stream;
@@ -1024,6 +1025,21 @@ bgl_output_port_buffer_set(obj_t port, obj_t buf) {
    OUTPUT_PORT(port).buf = buf;
    OUTPUT_PORT(port).ptr = (char *)&STRING_REF(buf, 0);
    OUTPUT_PORT(port).end = (char *)&STRING_REF(buf, STRING_LENGTH(buf));
+}
+
+/*---------------------------------------------------------------------*/
+/*    long                                                             */
+/*    bgl_output_port_timeout ...                                      */
+/*---------------------------------------------------------------------*/
+long
+bgl_output_port_timeout(obj_t port) {
+   struct bgl_output_timeout *to = PORT(port).timeout;
+
+   if (!to) {
+      return 0;
+   } else {
+      return to->timeout.tv_sec * 1000000 + to->timeout.tv_usec;
+   }
 }
 
 /*---------------------------------------------------------------------*/
@@ -1367,7 +1383,7 @@ bgl_make_input_port(obj_t name, FILE *file, obj_t kindof, obj_t buf) {
 	 new_input_port = GC_MALLOC(INPUT_PORT_SIZE);
    }
 
-   new_input_port->port.header = MAKE_HEADER(INPUT_PORT_TYPE, 0);
+   new_input_port->port.header = BGL_MAKE_HEADER(INPUT_PORT_TYPE, 0);
    new_input_port->port.kindof = kindof;
    new_input_port->port.name = name;
    new_input_port->port.stream.file = file;
@@ -1482,6 +1498,21 @@ bgl_input_port_buffer_set(obj_t ip, obj_t buffer) {
 #if (defined(RGC_0))
       STRING_SET(buffer, 0 , '\0');
 #endif      
+   }
+}
+
+/*---------------------------------------------------------------------*/
+/*    long                                                             */
+/*    bgl_input_port_timeout ...                                       */
+/*---------------------------------------------------------------------*/
+long
+bgl_input_port_timeout(obj_t port) {
+   struct bgl_input_timeout *to = PORT(port).timeout;
+
+   if (!to) {
+      return 0;
+   } else {
+      return to->timeout.tv_sec * 1000000 + to->timeout.tv_usec;
    }
 }
 
@@ -1700,7 +1731,7 @@ bgl_open_input_descriptor(int fd, obj_t buffer) {
 /*    bgl_input_string_seek ...                                        */
 /*---------------------------------------------------------------------*/
 static void
-bgl_input_string_seek(obj_t port, long pos) {
+bgl_input_string_seek(obj_t port, long pos, int whence) {
    long offset = CREF(port)->input_string_port.offset;
    
    if (pos >= 0 && pos < BGL_INPUT_PORT_BUFSIZ(port)) {
@@ -1807,8 +1838,9 @@ bgl_open_input_mmap(obj_t mmap, obj_t buffer, long offset, long end) {
    obj_t port = bgl_make_input_port(mmap, 0L, KINDOF_MMAP, buffer);
 
    CREF(port)->input_mmap_port.offset = offset;
+   CREF(port)->input_mmap_port.start = offset;
    CREF(port)->input_mmap_port.end = end;
-   
+   CREF(port)->input_mmap_port.iport.length = end - offset;
    return port;
 }
 
@@ -2027,7 +2059,7 @@ bgl_input_port_reopen(obj_t port) {
    FILE *nf;
 
    if (!INPUT_PORT_ON_FILEP(port)) {
-      if (INPUT_STRING_PORTP(port)) {
+      if (INPUT_STRING_PORTP(port) || INPUT_MMAP_PORTP(port)) {
  	 return bgl_input_port_seek(port, 0);
       } else {
 	 return BFALSE;
@@ -3243,13 +3275,13 @@ bgl_open_pipes(obj_t name) {
 
    if (!pipe(pipefd)) {
       obj_t out = bgl_make_output_port(name,
-					(bgl_stream_t)pipefd[ 1 ],
-					BGL_STREAM_TYPE_FD,
-					KINDOF_PIPE,
-					make_string_sans_fill(0),
-					bgl_syswrite,
-					lseek,
-					close);
+				       (bgl_stream_t)pipefd[ 1 ],
+				       BGL_STREAM_TYPE_FD,
+				       KINDOF_PIPE,
+				       make_string_sans_fill(0),
+				       bgl_syswrite,
+				       (long (*)())lseek,
+				       close);
       obj_t in = bgl_make_input_port(name,
 				      fdopen(pipefd[ 0 ], "r"),
 				      KINDOF_PIPE,

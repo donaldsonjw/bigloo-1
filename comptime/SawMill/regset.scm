@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Jun 16 15:37:03 2005                          */
-;*    Last change :  Thu Jun 30 19:26:07 2022 (serrano)                */
-;*    Copyright   :  2005-22 Manuel Serrano                            */
+;*    Last change :  Tue Apr  9 16:14:36 2024 (serrano)                */
+;*    Copyright   :  2005-24 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    Register sets for regiter allocation                             */
 ;*=====================================================================*/
@@ -40,13 +40,14 @@
 	       (msize::int read-only)
 	       (regv::vector read-only)
 	       (regl::pair-nil read-only)
-	       (string::bstring (default '#()))))
+	       (string::bstring (default ""))))
 
    (export  (make-empty-regset::regset ::pair-nil)
+	    (inline regset-ref s i)
 	    (list->regset::regset ::pair-nil ::pair-nil)
 	    (regset->list::pair-nil ::regset)
 	    (duplicate-regset::regset ::regset)
-	    (regset-member?::bool ::rtl_reg/ra ::regset)
+	    (inline regset-member?::bool ::rtl_reg/ra ::regset)
 	    (regset-empty? ::regset)
 	    (regset-add!::bool ::regset ::rtl_reg/ra)
 	    (regset-add*!::bool ::regset ::pair-nil)
@@ -66,7 +67,7 @@
 ;*---------------------------------------------------------------------*/
 ;*    regset-ref ...                                                   */
 ;*---------------------------------------------------------------------*/
-(define (regset-ref s i)
+(define-inline (regset-ref s i)
    (char->integer (string-ref (regset-string s) i)))
 
 ;*---------------------------------------------------------------------*/
@@ -125,7 +126,7 @@
 ;*---------------------------------------------------------------------*/
 ;*    regset-member? ...                                               */
 ;*---------------------------------------------------------------------*/
-(define (regset-member?::bool reg::rtl_reg/ra s::regset)
+(define-inline (regset-member?::bool reg::rtl_reg/ra s::regset)
    (with-access::rtl_reg/ra reg (num)
       (let ((base (/fx num 8))
 	    (bit (remainderfx num 8)))

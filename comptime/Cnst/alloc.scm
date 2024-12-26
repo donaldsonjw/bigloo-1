@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Mon Feb  6 13:51:36 1995                          */
-;*    Last change :  Fri Jun  3 14:21:30 2022 (serrano)                */
-;*    Copyright   :  1995-2022 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Mon Sep 23 10:06:51 2024 (serrano)                */
+;*    Copyright   :  1995-2024 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The constant allocations.                                        */
 ;*=====================================================================*/
@@ -50,6 +50,7 @@
 	    (cnst-alloc-keyword::node ::keyword <loc>)
 	    (cnst-alloc-procedure::node ::node <loc>)
 	    (cnst-alloc-l-procedure::node ::node <loc>)
+	    (cnst-alloc-integer::node ::long <loc>)
 	    (cnst-alloc-real::node ::real <loc>)
 	    (cnst-alloc-elong::node ::elong <loc>)
 	    (cnst-alloc-llong::node ::llong <loc>)
@@ -118,6 +119,7 @@
 ;*---------------------------------------------------------------------*/
 (define *string-env*     '())
 (define *ucs2string-env* '())
+(define *integer-env*    '())
 (define *real-env*       '())
 (define *elong-env*      '())
 (define *llong-env*      '())
@@ -199,17 +201,20 @@
 ;*    make-cnst-table-ref ...                                          */
 ;*---------------------------------------------------------------------*/
 (define (make-cnst-table-ref offset type loc)
-   (instantiate::app
+   (instantiate::cast
       (loc loc)
       (type (strict-node-type type (get-default-type)))
-      (fun (instantiate::ref
+      (arg (instantiate::app
 	      (loc loc)
-	      (type (strict-node-type (get-default-type) (variable-type *cnst-table-ref*)))
-	      (variable *cnst-table-ref*)))
-      (args (list (instantiate::literal
-		     (loc loc)
-		     (type *int*)
-		     (value offset))))))
+	      (type *obj*)
+	      (fun (instantiate::ref
+		      (loc loc)
+		      (type (strict-node-type (get-default-type) (variable-type *cnst-table-ref*)))
+		      (variable *cnst-table-ref*)))
+	      (args (list (instantiate::literal
+			     (loc loc)
+			     (type *int*)
+			     (value offset))))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    cnst-alloc-string ...                                            */
@@ -219,7 +224,8 @@
 ;*    input-string-port!                                               */
 ;*---------------------------------------------------------------------*/
 (define (cnst-alloc-string string loc)
-   (define (alloc-string)
+   
+   (define (alloc-string-literal::ref)
       ;; in lib-mode string are statically allocated
       (let ((var (def-global-scnst!
 		    (make-typed-ident (gensym 'string) 'bstring)
@@ -227,12 +233,33 @@
 		    string
 		    'sstring
 		    loc)))
-	 (if *shared-cnst?*
-	     (hashtable-put! *string-env* string (cnst-info string var)))
+	 (when *shared-cnst?*
+	    (hashtable-put! *string-env* string (cnst-info string var)))
 	 (instantiate::ref
 	    (loc loc)
 	    (type *bstring*)
 	    (variable var))))
+
+   (define (alloc-string)
+      (let ((ref (alloc-string-literal)))
+	 (unless (backend-string-literal-support (the-backend))
+	    ;; when the backend does not support string literals
+	    ;; e.g., wasm, the cnst pass generate a dummy pragma form
+	    ;; that will enable the backend to generate ad-hoc code
+	    ;; for building the string at init-time.
+	    (with-access::ref ref (variable)
+	       (add-cnst-sexp!
+		  `(set! (@ ,(global-id variable) ,(global-module variable))
+		      ,(coerce!
+			  (instantiate::pragma
+			     (type *bstring*)
+			     (srfi0 (backend-srfi0 (the-backend)))
+			     (format (format "string:~a" string)))
+			  variable
+			  (strict-node-type *bstring* *obj*)
+			  #f)))))
+	 ref))
+	  
    (let ((old (and *shared-cnst?* (hashtable-get *string-env* string))))
       (cond
 	 (old
@@ -483,9 +510,47 @@
 	 (variable var))))
 
 ;*---------------------------------------------------------------------*/
+;*    cnst-alloc-integer ...                                           */
+;*---------------------------------------------------------------------*/
+(define (cnst-alloc-integer integer loc)
+   
+   (define (lib-alloc-integer)
+      (let ((var (def-global-scnst! (make-typed-ident (gensym 'integer) 'bint)
+		    *module*
+		    integer
+		    'sinteger
+		    loc)))
+	 (set! *integer-env* (cons (cons integer var) *integer-env*))
+	 (instantiate::ref
+	    (loc loc)
+	    (type (variable-type var))
+	    (variable var))))
+   
+   (define (find-integer)
+      (let loop ((list *integer-env*))
+	 (cond
+	    ((null? list)
+	     #f)
+	    ((=fx (car (car list)) integer)
+	     (cdr (car list)))
+	    (else
+	     (loop (cdr list))))))
+   
+   (let ((old (find-integer)))
+      (cond
+	 (old
+	  (instantiate::ref
+	     (loc loc)
+	     (type (variable-type old))
+	     (variable old)))
+	 (else
+	  (lib-alloc-integer)))))
+
+;*---------------------------------------------------------------------*/
 ;*    cnst-alloc-real ...                                              */
 ;*---------------------------------------------------------------------*/
 (define (cnst-alloc-real real loc)
+
    (define (lib-alloc-real)
       (let ((var (def-global-scnst! (make-typed-ident (gensym 'real) 'real)
 		    *module*
@@ -497,6 +562,7 @@
 	    (loc loc)
 	    (type (variable-type var))
 	    (variable var))))
+   
    (define (find-real)
       (let loop ((list *real-env*))
 	 (cond
@@ -507,6 +573,7 @@
 	     (cdr (car list)))
 	    (else
 	     (loop (cdr list))))))
+   
    (let ((old (find-real)))
       (cond
 	 (old
@@ -521,6 +588,7 @@
 ;*    cnst-alloc-elong ...                                             */
 ;*---------------------------------------------------------------------*/
 (define (cnst-alloc-elong elong loc)
+
    (define (lib-alloc-elong)
       (let ((var (def-global-scnst! (make-typed-ident (gensym 'elong) 'belong)
 		    *module*
@@ -532,6 +600,7 @@
 	    (loc loc)
 	    (type (variable-type var))
 	    (variable var))))
+   
    (define (find-elong)
       (let loop ((list *elong-env*))
 	 (cond
@@ -541,6 +610,7 @@
 	     (cdr (car list)))
 	    (else
 	     (loop (cdr list))))))
+   
    (let ((old (find-elong)))
       (cond
 	 (old
@@ -555,6 +625,7 @@
 ;*    cnst-alloc-llong ...                                             */
 ;*---------------------------------------------------------------------*/
 (define (cnst-alloc-llong llong loc)
+
    (define (lib-alloc-llong)
       (let ((var (def-global-scnst! (make-typed-ident (gensym 'llong) 'bllong)
 		    *module*
@@ -566,6 +637,7 @@
 	    (loc loc)
 	    (type (variable-type var))
 	    (variable var))))
+   
    (define (find-llong)
       (let loop ((list *llong-env*))
 	 (cond
@@ -575,6 +647,7 @@
 	     (cdr (car list)))
 	    (else
 	     (loop (cdr list))))))
+   
    (let ((old (find-llong)))
       (cond
 	 (old
@@ -589,6 +662,7 @@
 ;*    cnst-alloc-int32 ...                                             */
 ;*---------------------------------------------------------------------*/
 (define (cnst-alloc-int32 int32 loc)
+
    (define (lib-alloc-int32)
       (let ((var (def-global-scnst! (make-typed-ident (gensym 'int32) 'bint32)
 		    *module*
@@ -600,6 +674,7 @@
 	    (loc loc)
 	    (type (variable-type var))
 	    (variable var))))
+   
    (define (find-int32)
       (let loop ((list *int32-env*))
 	 (cond
@@ -609,6 +684,7 @@
 	     (cdr (car list)))
 	    (else
 	     (loop (cdr list))))))
+   
    (let ((old (find-int32)))
       (cond
 	 (old
@@ -623,6 +699,7 @@
 ;*    cnst-alloc-uint32 ...                                            */
 ;*---------------------------------------------------------------------*/
 (define (cnst-alloc-uint32 uint32 loc)
+
    (define (lib-alloc-uint32)
       (let ((var (def-global-scnst! (make-typed-ident (gensym 'uint32) 'buint32)
 		    *module*
@@ -634,6 +711,7 @@
 	    (loc loc)
 	    (type (variable-type var))
 	    (variable var))))
+   
    (define (find-uint32)
       (let loop ((list *uint32-env*))
 	 (cond
@@ -643,6 +721,7 @@
 	     (cdr (car list)))
 	    (else
 	     (loop (cdr list))))))
+   
    (let ((old (find-uint32)))
       (cond
 	 (old
@@ -657,6 +736,7 @@
 ;*    cnst-alloc-int64 ...                                             */
 ;*---------------------------------------------------------------------*/
 (define (cnst-alloc-int64 int64 loc)
+
    (define (lib-alloc-int64)
       (let ((var (def-global-scnst! (make-typed-ident (gensym 'int64) 'bint64)
 		    *module*
@@ -668,6 +748,7 @@
 	    (loc loc)
 	    (type (variable-type var))
 	    (variable var))))
+   
    (define (find-int64)
       (let loop ((list *int64-env*))
 	 (cond
@@ -677,6 +758,7 @@
 	     (cdr (car list)))
 	    (else
 	     (loop (cdr list))))))
+   
    (let ((old (find-int64)))
       (cond
 	 (old
@@ -691,6 +773,7 @@
 ;*    cnst-alloc-uint64 ...                                            */
 ;*---------------------------------------------------------------------*/
 (define (cnst-alloc-uint64 uint64 loc)
+
    (define (lib-alloc-uint64)
       (let ((var (def-global-scnst! (make-typed-ident (gensym 'uint64) 'buint64)
 		    *module*
@@ -702,6 +785,7 @@
 	    (loc loc)
 	    (type (variable-type var))
 	    (variable var))))
+   
    (define (find-uint64)
       (let loop ((list *uint64-env*))
 	 (cond
@@ -711,6 +795,7 @@
 	     (cdr (car list)))
 	    (else
 	     (loop (cdr list))))))
+   
    (let ((old (find-uint64)))
       (cond
 	 (old
@@ -725,6 +810,7 @@
 ;*    cnst-alloc-list ...                                              */
 ;*---------------------------------------------------------------------*/
 (define (cnst-alloc-list pair loc)
+
    (define (cnst-list pair)
       (let loop ((pair pair))
 	 (cond
@@ -749,10 +835,11 @@
 		(args (list (cnst! (instantiate::kwote
 				      (loc loc)
 				      (type (strict-node-type
-					     (get-type-kwote (car pair))
-					     (get-default-type)))
+					       (get-type-kwote (car pair))
+					       (get-default-type)))
 				      (value (car pair))))
-			    (loop (cdr pair)))))))))
+			 (loop (cdr pair)))))))))
+
    (define (lib-alloc-list)
       (let ((var (def-global-svar! (make-typed-ident (gensym 'list) 'pair)
 		    *module*
@@ -761,12 +848,13 @@
 	 (if *shared-cnst?*
 	     (set! *list-env* (cons (cnst-info pair var) *list-env*)))
 	 (add-cnst-sexp! `(set! (@ ,(global-id var) ,(global-module var))
-				,(coerce! (cnst-list pair) var
-					  (strict-node-type *pair* *obj*) #f)))
+			     ,(coerce! (cnst-list pair) var
+				 (strict-node-type *pair* *obj*) #f)))
 	 (instantiate::ref
 	    (loc loc)
 	    (type (variable-type var))
 	    (variable var))))
+
    (define (read-alloc-list)
       (let ((offset *cnst-offset*))
 	 (set! *cnst-offset* (+fx 1 *cnst-offset*))
@@ -774,6 +862,7 @@
 	 (if *shared-cnst?*
 	     (set! *list-env* (cons (cnst-info pair offset) *list-env*)))
 	 (make-cnst-table-ref offset *pair* loc)))
+   
    (let ((old (and *shared-cnst?*
 		   (let loop ((env *list-env*))
 		      (cond
@@ -801,6 +890,7 @@
 ;*    cnst-alloc-vector ...                                            */
 ;*---------------------------------------------------------------------*/
 (define (cnst-alloc-vector vec loc)
+   
    (define (cnst-vector-node)
       (cnst!
        (coerce!
@@ -859,26 +949,29 @@
 	#unspecified
 	(strict-node-type *vector* *obj*)
 	#f)))
+   
    (define (read-alloc-vector)
       (let ((offset *cnst-offset*))
 	 (set! *cnst-offset* (+fx 1 *cnst-offset*))
 	 (set! *global-set* (cons vec *global-set*))
-	 (if *shared-cnst?*
-	     (set! *vector-env* (cons (cnst-info vec offset) *vector-env*)))
+	 (when *shared-cnst?*
+	    (set! *vector-env* (cons (cnst-info vec offset) *vector-env*)))
 	 (make-cnst-table-ref offset *vector* loc)))
+   
    (define (lib-alloc-vector)
       (let ((var (def-global-svar! (make-typed-ident (gensym 'vector) 'vector)
 		    *module*
 		    'cnst-vector
 		    'now)))
-	 (if *shared-cnst?*
-	     (set! *vector-env* (cons (cnst-info vec var) *vector-env*)))
+	 (when *shared-cnst?*
+	    (set! *vector-env* (cons (cnst-info vec var) *vector-env*)))
 	 (add-cnst-sexp! `(set! (@ ,(global-id var) ,(global-module var))
 				,(cnst-vector-node)))
 	 (instantiate::ref
 	    (loc loc)
 	    (type (strict-node-type *vector* (variable-type var)))
 	    (variable var))))
+   
    (let ((old (and *shared-cnst?*
 		   (let loop ((env *vector-env*))
 		      (cond
@@ -894,7 +987,7 @@
 	      (instantiate::ref
 		 (loc loc)
 		 (type (strict-node-type
-			*vector* (variable-type (cnst-info-offset old))))
+			  *vector* (variable-type (cnst-info-offset old))))
 		 (variable (cnst-info-offset old)))
 	      (make-cnst-table-ref (cnst-info-offset old) *vector* loc)))
 	 ((eq? *init-mode* 'lib)

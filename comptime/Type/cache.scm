@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/comptime/Type/cache.scm              */
+;*    serrano/prgm/project/bigloo/bigloo/comptime/Type/cache.scm       */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Wed Jan 18 11:28:43 1995                          */
-;*    Last change :  Sat Feb  6 09:44:17 2016 (serrano)                */
-;*    Copyright   :  1995-2016 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Mon Sep 16 17:02:34 2024 (serrano)                */
+;*    Copyright   :  1995-2024 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    A small type cache to avoid to many lookup in Tenv.              */
 ;*=====================================================================*/
@@ -67,10 +67,13 @@
 	   *struct*
 	   *unspec*
 	   *procedure*
+	   *procedure-l*
 	   *procedure-el*
 	   *exit*
 	   *foreign*
 	   *mutex*
+	   *output-port*
+	   *input-port*
 	   *_*
 	   (get-default-type::type)
 	   (set-default-type! ::type)
@@ -144,6 +147,7 @@
 			     (use-type! 'f64vector #f)))
    (set! *struct*        (use-type! 'struct #f))
    (set! *procedure*     (use-type! 'procedure #f))
+   (set! *procedure-l*   (use-type! 'procedure-l #f))
    (set! *procedure-el*  (use-type! 'procedure-el #f))
    (set! *unspec*        (use-type! 'unspecified #f))
    (set! *exit*          (use-type! 'exit #f))
@@ -155,6 +159,8 @@
 			     #f))
    (set! *foreign*       (use-type! 'foreign #f))
    (set! *mutex*         (use-type! 'mutex #f))
+   (set! *output-port*   (use-type! 'output-port #f))
+   (set! *input-port*    (use-type! 'input-port #f))
    (set! *_*             (use-type! '_ #f))
    (set! *default-type* *_*))
 
@@ -211,6 +217,7 @@
 (define *hvectors*      'no-type-yet)
 (define *struct*        'no-type-yet)
 (define *procedure*     'no-type-yet)
+(define *procedure-l*   'no-type-yet)
 (define *procedure-el*  'no-type-yet)
 (define *unspec*        'no-type-yet)
 (define *exit*          'no-type-yet)
@@ -218,6 +225,8 @@
 (define *class*         'no-type-yet)
 (define *foreign*       'no-type-yet)
 (define *mutex*         'no-type-yet)
+(define *output-port*   'no-type-yet)
+(define *input-port*    'no-type-yet)
 (define *_*             'no-type-yet)
 (define *default-type*  'no-type-yet)
 

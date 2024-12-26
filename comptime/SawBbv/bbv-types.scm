@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Jul 20 07:05:22 2017                          */
-;*    Last change :  Fri Dec 15 09:58:46 2023 (serrano)                */
-;*    Copyright   :  2017-23 Manuel Serrano                            */
+;*    Last change :  Fri Jun 28 10:11:08 2024 (serrano)                */
+;*    Copyright   :  2017-24 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    BBV specific types                                               */
 ;*=====================================================================*/
@@ -31,7 +31,9 @@
 	    saw_regset
 	    saw_regutils
 	    saw_bbv-cache
-	    saw_bbv-range)
+	    saw_bbv-range
+	    saw_bbv-config
+	    saw_bbv-gc)
 
    (export  (wide-class rtl_ins/bbv::rtl_ins
 	       (def (default #unspecified))
@@ -52,12 +54,14 @@
 	       (%mark::long (default -1))
 	       (%hash::obj (default #f))
 	       (%blacklist::obj (default '()))
-	       (%merge-info::pair-nil (default '()))
 	       (ctx::bbv-ctx read-only)
 	       (parent::blockV read-only)
-	       (cnt::long (default 0))
+	       (gccnt::long (default 0))
+	       (gcmark::long (default -1))
 	       (mblock::obj (default #f))
-	       (collapsed::bool (default #f)))
+	       (creator::obj read-only) 
+	       (merges::pair-nil (default '()))
+	       (asleep::bool (default #f)))
 	    
 	    ;; block queue
 	    (class bbv-queue
@@ -76,11 +80,10 @@
 	       (reg::rtl_reg read-only)
 	       (types::pair read-only (default (list *obj*)))
 	       (polarity::bool read-only)
+	       (count::long (default 0))
 	       (value read-only (default '_))
 	       (aliases::pair-nil (default '()))
 	       (initval::obj (default #unspecified)))
-
-	    (blockS-%merge-info-add! b::blockS lbl val)
 
 	    (get-bb-mark)
 	    
@@ -88,8 +91,10 @@
 	    (bbv-queue-empty? ::bbv-queue)
 	    (bbv-queue-push! ::bbv-queue ::blockS)
 	    (bbv-queue-pop!::blockS ::bbv-queue)
-	    
+	    (bbv-queue-has?::bool ::bbv-queue ::blockS)
+
 	    (blockV-live-versions::pair-nil ::blockV)
+	    (block-live?::bool bs::blockS)
 	    
 	    (params->ctx::bbv-ctx ::pair-nil)
 
@@ -99,7 +104,9 @@
 	    (extend-ctx/entry ::bbv-ctx ::bbv-ctxentry)
 	    (extend-ctx/entry* ctx::bbv-ctx . entries)
 	    (extend-ctx::bbv-ctx ::bbv-ctx ::rtl_reg ::pair ::bool
-	       #!key (value '_))
+	       #!key (value '_) (aliases #f) (count 1))
+	    (extend-ctx!::bbv-ctx ::bbv-ctx ::rtl_reg ::pair ::bool
+	       #!key (value '_) (aliases #f))
 	    (extend-ctx* ctx::bbv-ctx regs::pair ::pair ::bool
 	       #!key (value '_))
 	    (alias-ctx::bbv-ctx ::bbv-ctx ::rtl_reg ::rtl_reg)
@@ -114,6 +121,7 @@
 	    (rtl_ins-nop?::bool i::rtl_ins)
 	    (rtl_ins-mov?::bool i::rtl_ins)
 	    (rtl_ins-go?::bool i::rtl_ins)
+	    (rtl_ins-pragma? i::rtl_ins)
 	    (rtl_ins-fail?::bool i::rtl_ins)
 	    (rtl_ins-switch? i::rtl_ins)
 	    (rtl_ins-br?::bool i::rtl_ins)
@@ -134,15 +142,6 @@
 	    (rtl_ins-typecheck i::rtl_ins)
 	    (rtl_call-predicate i::rtl_ins)
 	    (rtl_call-values i::rtl_ins)))
-
-;*---------------------------------------------------------------------*/
-;*    blockS-%merge-info-add! ...                                      */
-;*---------------------------------------------------------------------*/
-(define (blockS-%merge-info-add! b::blockS lbl val)
-   (with-access::blockS b (%merge-info)
-      (let ((c (assq lbl %merge-info)))
-	 (unless (pair? c)
-	    (set! %merge-info (cons (cons lbl val) %merge-info))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    object-print ::blockV ...                                        */
@@ -180,14 +179,19 @@
 ;*    shape ::bbv-ctxentry ...                                         */
 ;*---------------------------------------------------------------------*/
 (define-method (shape e::bbv-ctxentry)
-   (with-access::bbv-ctxentry e (reg types polarity value aliases)
-      (vector (shape reg)
-	 (format "[~( )]"
-	    (if polarity
-		(map shape types)
-		(map (lambda (t) (format "!~a" (shape t))) types)))
-	 (format "~s" (shape value))
-	 (map shape aliases))))
+   (with-access::bbv-ctxentry e (reg types polarity value aliases count)
+      (if (and (=fx (length types) 1)
+	       (eq? (car types) *obj*)
+	       (eq? value '_)
+	       (null? aliases))
+	  (shape reg)
+	  (vector (shape reg)
+	     (format "[~( )]"
+		(if polarity
+		    (map (lambda (t) (format "~a:~a" (shape t) count)) types)
+		    (map (lambda (t) (format "!~a" (shape t))) types)))
+	     (format "~s" (shape value))
+	     (map shape aliases)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    *bb-mark* ...                                                    */
@@ -242,16 +246,31 @@
 		(set! last '()))
 	     b)
 	  (error "bbv-queue-pop!" "Illegal empty queue" queue))))
-   
+
+;*---------------------------------------------------------------------*/
+;*    bbv-queue-has? ...                                               */
+;*---------------------------------------------------------------------*/
+(define (bbv-queue-has?::bool queue::bbv-queue b::blockS)
+   (with-access::bbv-queue queue (blocks)
+      (memq b blocks)))
+
 ;*---------------------------------------------------------------------*/
 ;*    blockV-live-versions ...                                         */
 ;*---------------------------------------------------------------------*/
 (define (blockV-live-versions bv::blockV)
    (with-access::blockV bv (versions)
-      (filter (lambda (bs)
-		 (with-access::blockS bs (mblock cnt)
-		    (and (not mblock) (>fx cnt 0))))
-	 versions)))
+      (filter block-live? versions)))
+
+;*---------------------------------------------------------------------*/
+;*    block-live? ...                                                  */
+;*---------------------------------------------------------------------*/
+(define (block-live? bs::blockS)
+   (with-access::blockS bs (mblock gccnt label)
+      (and (not mblock)
+	   (case *bbv-blocks-gc*
+	      ((ssr) (bbv-gc-block-reachable? bs))
+	      ((cnt) (>fx gccnt 0))
+	      (else #t)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    params->ctx ...                                                  */
@@ -267,8 +286,20 @@
 				       (instantiate::bbv-ctxentry
 					  (reg p)
 					  (types (list type))
+					  (count 10)
+					  (value (if (or (eq? type *bint*)
+							 (eq? type *long*))
+						     (fixnum-range)
+						     '_))
 					  (polarity #t)))))
 		     params)))))
+
+;*---------------------------------------------------------------------*/
+;*    list-eq? ...                                                     */
+;*---------------------------------------------------------------------*/
+(define (list-eq? l1 l2)
+   (when (=fx (length l1) (length l2))
+      (every eq? l1 l2)))
 
 ;*---------------------------------------------------------------------*/
 ;*    bbv-ctxentry-equal? ...                                          */
@@ -277,15 +308,18 @@
    (with-access::bbv-ctxentry x ((xreg reg)
 				 (xpolarity polarity)
 				 (xtypes types)
-				 (xvalue value))
+				 (xvalue value)
+				 (xaliases aliases))
       (with-access::bbv-ctxentry y ((yreg reg)
 				    (ypolarity polarity)
 				    (ytypes types)
-				    (yvalue value))
+				    (yvalue value)
+				    (yaliases aliases))
 	 (and (eq? xreg yreg)
 	      (eq? xpolarity ypolarity)
-	      (equal? xtypes ytypes)
-	      (equal? xvalue yvalue)))))
+	      (equal? xvalue yvalue)
+	      (list-eq? xtypes ytypes)
+	      (list-eq? xaliases yaliases)))))
 	      
 ;*---------------------------------------------------------------------*/
 ;*    bbv-ctx-equal? ...                                               */
@@ -293,11 +327,12 @@
 (define (bbv-ctx-equal? x::bbv-ctx y::bbv-ctx)
    (with-access::bbv-ctx x ((xentries entries))
       (with-access::bbv-ctx y ((yentries entries))
-	 (every (lambda (xe)
-		   (with-access::bbv-ctxentry xe (reg)
-		      (let ((ye (bbv-ctx-get y reg)))
-			 (bbv-ctxentry-equal? xe ye))))
-	    xentries))))
+	 (when (=fx (length xentries) (length yentries))
+	    (every (lambda (xe)
+		      (with-access::bbv-ctxentry xe (reg)
+			 (let ((ye (bbv-ctx-get y reg)))
+			    (bbv-ctxentry-equal? xe ye))))
+	       xentries)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    bbv-ctx-assoc ...                                                */
@@ -338,7 +373,7 @@
 		  ((null? es)
 		   (list entry))
 		  ((>fx (rtl_reg/ra-num (bbv-ctxentry-reg (car es))) rnum)
-		   (cons entry ctx))
+		   (cons entry es))
 		  ((eq? (bbv-ctxentry-reg (car es)) reg)
 		   (cons entry (cdr es)))
 		  (else
@@ -365,15 +400,17 @@
 ;*    -------------------------------------------------------------    */
 ;*    Extend the context with a new register assignement.              */
 ;*---------------------------------------------------------------------*/
-(define (extend-ctx ctx::bbv-ctx reg::rtl_reg types::pair polarity::bool
-	   #!key (value '_))
+(define (extend-ctx::bbv-ctx ctx::bbv-ctx reg::rtl_reg types::pair polarity::bool
+	   #!key (value '_) (aliases #f) (count 1))
    
    (define (new-ctxentry reg::rtl_reg type polarity::bool value)
       (instantiate::bbv-ctxentry
 	 (reg reg)
 	 (types types)
+	 (count (if (memq *obj* types) 0 count))
 	 (polarity polarity)
-	 (value value)))
+	 (value value)
+	 (aliases (or aliases '()))))
    
    (define (extend-entries ctx reg types polarity value)
       (let ((rnum (rtl_reg/ra-num reg)))
@@ -381,28 +418,99 @@
 	    (let loop ((entries entries))
 	       (cond
 		  ((null? entries)
-		   (let ((n (new-ctxentry reg type polarity value)))
+		   (let ((n (new-ctxentry reg types polarity value)))
 		      (list n)))
 		  ((>fx (rtl_reg/ra-num (bbv-ctxentry-reg (car entries))) rnum)
-		   (let ((n (new-ctxentry reg type polarity value)))
+		   (let ((n (new-ctxentry reg types polarity value)))
 		      (cons n entries)))
 		  ((eq? (bbv-ctxentry-reg (car entries)) reg)
-		   (let ((n (duplicate::bbv-ctxentry (car entries)
-			       (types types)
-			       (polarity polarity)
-			       (value value))))
-		      (cons n (cdr entries))))
+		   (with-access::bbv-ctxentry (car entries) ((oa aliases) (otypes types) (opolarity polarity) (ocount count))
+		      (if (and (eq? polarity opolarity) (not polarity))
+			  ;; accumulate negative polarity
+			  (let ((n (duplicate::bbv-ctxentry (car entries)
+				      (types (delete-duplicates (append otypes types) eq?))
+				      (polarity polarity)
+				      (count 0)
+				      (value value)
+				      (aliases (or aliases oa)))))
+			     (cons n (cdr entries)))
+			  (let ((n (duplicate::bbv-ctxentry (car entries)
+				      (types types)
+				      (polarity polarity)
+				      (value value)
+				      (count (+fx ocount 1))
+				      (aliases (or aliases oa)))))
+			     (cons n (cdr entries))))))
 		  (else
 		   (cons (car entries) (loop (cdr entries)))))))))
    
    (if (not (isa? reg rtl_reg/ra))
        ctx
-       (let ((v (if (and (eq? value '_) polarity
-			 (pair? types) (eq? (car types) *bint*) (null? (cdr types)))
+       (let ((v (if (and (eq? value '_)
+			 polarity
+			 (pair? types)
+			 (or (eq? (car types) *bint*) (eq? (car types) *long*))
+			 (null? (cdr types)))
 		    (fixnum-range)
 		    value)))
 	  (duplicate::bbv-ctx ctx
 	     (entries (extend-entries ctx reg types polarity v))))))
+
+;*---------------------------------------------------------------------*/
+;*    extend-ctx! ...                                                  */
+;*    -------------------------------------------------------------    */
+;*    Extend the context with a new register assignement. Contrary to  */
+;*    extend-ctx! this function assumes that:                          */
+;*      - reg is not already in ctx                                    */
+;*      - ctx is a newly allocated context that can be mutated because */
+;*        not shared yet.                                              */
+;*---------------------------------------------------------------------*/
+(define (extend-ctx! ctx::bbv-ctx reg::rtl_reg types::pair polarity::bool
+	   #!key (value '_) (aliases #f))
+   
+   (define (new-ctxentry reg::rtl_reg type polarity::bool value)
+      (instantiate::bbv-ctxentry
+	 (reg reg)
+	 (types types)
+	 (polarity polarity)
+	 (value value)
+	 (aliases (or aliases '()))))
+   
+   (define (extend-entries ctx reg types polarity value)
+      (let ((rnum (rtl_reg/ra-num reg)))
+	 (with-access::bbv-ctx ctx (entries)
+	    (cond
+	       ((null? entries)
+		(let ((n (new-ctxentry reg type polarity value)))
+		   (list n)))
+	       ((>fx (rtl_reg/ra-num (bbv-ctxentry-reg (car entries))) rnum)
+		(let ((n (new-ctxentry reg type polarity value)))
+		   (cons n entries)))
+	       (else
+		(let loop ((cur (cdr entries))
+			   (prev entries))
+		   (cond
+		      ((null? cur)
+		       (let ((n (new-ctxentry reg type polarity value)))
+			  (set-cdr! prev (list n))
+			  entries))
+		      ((>fx (rtl_reg/ra-num (bbv-ctxentry-reg (car cur))) rnum)
+		       (let ((n (new-ctxentry reg type polarity value)))
+			  (set-cdr! prev (cons n cur))
+			  entries))
+		      (else
+		       (loop (cdr cur) cur)))))))))
+   
+   (let ((v (if (and (eq? value '_)
+		     polarity
+		     (pair? types)
+		     (or (eq? (car types) *bint*) (eq? (car types) *long*))
+		     (null? (cdr types)))
+		(fixnum-range)
+		value)))
+      (with-access::bbv-ctx ctx (entries)
+	 (set! entries (extend-entries ctx reg types polarity v))
+	 ctx)))
 
 ;*---------------------------------------------------------------------*/
 ;*    extend-ctx* ...                                                  */
@@ -424,26 +532,36 @@
 ;*    Create an alias between REG and ALIAS.                           */
 ;*---------------------------------------------------------------------*/
 (define (alias-ctx ctx::bbv-ctx reg::rtl_reg alias::rtl_reg)
-   (let ((re (bbv-ctx-get ctx reg))
-	 (ae (bbv-ctx-get ctx alias)))
-      (with-access::bbv-ctxentry re (aliases)
-	 (with-access::bbv-ctxentry ae ((aaliases aliases))
-	    (let ((all (delete-duplicates
-			  (cons alias (append aliases aaliases)))))
-	       (let ((nre (duplicate::bbv-ctxentry re
-			     (aliases all))))
-		  (let loop ((all all)
-			     (ctx (extend-ctx/entry ctx nre)))
-		     (if (null? all)
-			 ctx
-			 (let ((ae (bbv-ctx-get ctx (car all))))
-			    (if ae
-				(with-access::bbv-ctxentry ae (aliases)
-				   (let ((nae (duplicate::bbv-ctxentry ae
-						 (aliases (cons reg aliases)))))
-				      (loop (cdr all)
-					 (extend-ctx/entry ctx nae))))
-				(loop (cdr all) ctx)))))))))))
+   (if *bbv-optim-alias*
+       (if (eq? reg alias)
+	   ctx
+	   (let ((re (bbv-ctx-get ctx reg))
+		 (ae (bbv-ctx-get ctx alias)))
+	      (with-access::bbv-ctxentry re (aliases)
+		 (with-access::bbv-ctxentry ae ((aaliases aliases))
+		    (let ((all (delete-duplicates
+				  (cons alias (append aliases aaliases))
+				  eq?)))
+		       (let ((nre (duplicate::bbv-ctxentry re
+				     (aliases (remq reg all)))))
+			  (let loop ((all all)
+				     (ctx (extend-ctx/entry ctx nre)))
+			     (if (null? all)
+				 ctx
+				 (let ((ae (bbv-ctx-get ctx (car all))))
+				    (if ae
+					(with-access::bbv-ctxentry ae (aliases (re reg))
+					   (if (or (eq? reg re) (memq reg aliases))
+					       (loop (cdr all) ctx)
+					       (let ((nae (duplicate::bbv-ctxentry ae
+							     (aliases (remq alias
+									 (delete-duplicates
+									    (cons reg aliases)
+									    eq?))))))
+						  (loop (cdr all)
+						     (extend-ctx/entry ctx nae)))))
+					(loop (cdr all) ctx)))))))))))
+       ctx))
 	  
 ;*---------------------------------------------------------------------*/
 ;*    unalias-ctx ...                                                  */
@@ -451,26 +569,18 @@
 ;*    Removing all REG aliasings.                                      */
 ;*---------------------------------------------------------------------*/
 (define (unalias-ctx ctx::bbv-ctx reg::rtl_reg)
-   
-   (define (unalias ctx::bbv-ctx reg::rtl_reg alias::rtl_reg)
-      (let ((e (bbv-ctx-get ctx alias)))
-	 (if e
-	     (with-access::bbv-ctxentry e (aliases)
-		(extend-ctx/entry ctx
-		   (duplicate::bbv-ctxentry e
-		      (aliases (remq reg aliases)))))
-	     ctx)))
-   
-   (let ((e (bbv-ctx-get ctx reg)))
-      (if e
-	  (with-access::bbv-ctxentry e (aliases types polarity value)
-	     (let loop ((aliases aliases)
-			(ctx (extend-ctx ctx reg types polarity :value value)))
-		(if (null? aliases)
-		    ctx
-		    (loop (cdr aliases)
-		       (unalias ctx reg (car aliases))))))
-	  ctx)))
+   (if *bbv-optim-alias*
+       (with-access::bbv-ctx ctx (entries)
+	  (instantiate::bbv-ctx
+	     (entries (map (lambda (e)
+			      (with-access::bbv-ctxentry e ((ereg reg) (ealiases aliases))
+				 (if (eq? ereg reg)
+				     (duplicate::bbv-ctxentry e
+					(aliases '()))
+				     (duplicate::bbv-ctxentry e
+					(aliases (remq reg ealiases))))))
+			 entries))))
+       ctx))
 
 ;*---------------------------------------------------------------------*/
 ;*    shape ::rtl_ins/bbv ...                                          */
@@ -534,11 +644,12 @@
 	    (display " " p)
 	    (dump-ctx ctx in p)
 	    (display "]" p)
-	    (display " ;;")
-	    (display* " def=" (map shape (regset->list def)))
-	    (display* " in=" (map shape (regset->list in)))
-	    (display* " out=" (map shape (regset->list out)))
-	    (display* " " (typeof fun))))))
+	    (when (>=fx *bbv-verbose* 2)
+	       (display " ;;")
+	       (display* " def=" (map shape (regset->list def)))
+	       (display* " in=" (map shape (regset->list in)))
+	       (display* " out=" (map shape (regset->list out)))
+	       (display* " " (typeof fun)))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    dump ::blockV ...                                                */
@@ -574,20 +685,23 @@
 	 ((assq 'merge-new mi) 'merge-new)
 	 (else #f)))
    
-   (with-access::blockS o (label collapsed first parent ctx preds succs %merge-info)
+   (with-access::blockS o (label first parent ctx preds succs gccnt asleep)
       (fprint p "(blockS " label)
       (dump-margin p (+fx m 1))
       (fprint p ":parent " (block-label parent))
       (dump-margin p (+fx m 1))
       (fprint p ":merge " (with-access::blockV parent (merge) merge))
       (dump-margin p (+fx m 1))
-      (fprint p ":collapsed " collapsed)
-      (dump-margin p (+fx m 1))
       (fprint p ":preds " (map lbl preds))
       (dump-margin p (+fx m 1))
       (fprint p ":succs " (map lbl succs))
       (dump-margin p (+fx m 1))
-      (fprint p ":merge-info " (dump-merge-info %merge-info))
+      (fprint p ":ctx " (shape ctx))
+      (when *bbv-debug*
+	 (dump-margin p (+fx m 1))
+	 (fprint p ":cnt " gccnt)
+	 (dump-margin p (+fx m 1))
+	 (fprint p ":asleep " asleep))
       (dump-margin p (+fx m 1))
       (dump* first p (+fx m 1))
       (display "\n )\n" p)))
@@ -619,6 +733,13 @@
 (define (rtl_ins-go? i::rtl_ins)
    (with-access::rtl_ins i (fun)
       (isa? fun rtl_go)))
+
+;*---------------------------------------------------------------------*/
+;*    rtl_ins-pragma? ...                                              */
+;*---------------------------------------------------------------------*/
+(define (rtl_ins-pragma? i::rtl_ins)
+   (with-access::rtl_ins i (fun)
+      (isa? fun rtl_pragma)))
 
 ;*---------------------------------------------------------------------*/
 ;*    rtl_ins-fail? ...                                                */
@@ -1170,7 +1291,9 @@
 ;*    bbv-equal? ::rtl_new ...                                         */
 ;*---------------------------------------------------------------------*/
 (define-method (bbv-equal? x::rtl_new y)
-   (error "bbv-equal?" "not implemented" x))
+   (when (isa? rtl_new y)
+      (when (eq? (rtl_new-type x) (rtl_new-type y))
+	 (every bbv-equal? (rtl_new-constr x) (rtl_new-type y)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    bbv-equal? ::rtl_call ...                                        */
@@ -1183,7 +1306,7 @@
 ;*    bbv-equal? ::rtl_lightfuncall ...                                */
 ;*---------------------------------------------------------------------*/
 (define-method (bbv-equal? x::rtl_lightfuncall y)
-   (error "bbv-equal?" "not implemented" x))
+   #f)
 
 ;*---------------------------------------------------------------------*/
 ;*    bbv-equal? ::rtl_pragma ...                                      */
@@ -1210,7 +1333,7 @@
 ;*---------------------------------------------------------------------*/
 ;*    block-preds-update! ...                                          */
 ;*    -------------------------------------------------------------    */
-;*    Set the PREDS field and update CNT accordingly.                  */
+;*    Set the PREDS field                                              */
 ;*---------------------------------------------------------------------*/
 (define-generic (block-preds-update! b::block val::pair-nil)
    (with-access::block b (preds)
@@ -1221,8 +1344,15 @@
 ;*    -------------------------------------------------------------    */
 ;*    Set the PREDS field and update CNT accordingly.                  */
 ;*---------------------------------------------------------------------*/
-(define-method (block-preds-update! b::blockS val::pair-nil)
-   (with-access::blockS b (preds cnt)
-      (set! preds val)
-      (set! cnt (length preds))))
+(define-method (block-preds-update! b::blockS npreds::pair-nil)
+   (with-trace 'bbv-gc "block-preds-update!"
+      (trace-item "b=#" (block-label b) " npreds="
+	 (map (lambda (s)
+		 (format "#~a~a" (block-label s)
+		    (if (block-live? s) "+" "-")))
+	    npreds))
+      (with-access::blockS b (preds gccnt creator)
+	 (set! preds npreds)
+	 (set! gccnt (+fx (length npreds) (if (eq? creator 'root) 1 0))))))
 
+   

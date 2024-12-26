@@ -3,8 +3,8 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Wed Jan 14 08:29:03 1998                          */
-#*    Last change :  Fri Oct  6 09:26:35 2023 (serrano)                */
-#*    Copyright   :  1998-2023 Manuel Serrano, see LICENSE file        */
+#*    Last change :  Fri Dec 13 08:23:49 2024 (serrano)                */
+#*    Copyright   :  1998-2024 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The Makefile to build the compiler part of Bigloo (bootstrap).   */
 #*    This Makefile has to be processed by Gnu make.                   */
@@ -48,9 +48,10 @@ COMMONFLAGS	= -q \
                   -gno-error-localization \
                   -no-hello
 # Optimized _and_ debugged compilation
-OGBFLAGS        = $(BOOTFLAGS) $(COMMONFLAGS) -Wall -O2 +rm -g
+OGBFLAGS        = $(COMMONFLAGS) -Wall -O2 -rm -g $(BOOTFLAGS)
 # Bootstrap flag
-BFLAGS		= $(OGBFLAGS)       
+#BFLAGS		= $(OGBFLAGS)       
+BFLAGS		= $(COMMONFLAGS) -Wall -O2 $(BOOTFLAGS)
 EFLAGS		=
 # Distribution flag
 BDISTFLAGS	= $(COMMONFLAGS) -O2 -rm -unsafe -s
@@ -106,7 +107,7 @@ READ_OBJ	= $(READ_FILE:%=Read/%.o)
 #*--- module ----------------------------------------------------------*/
 MODULE_FILE	= foreign impuse main prototype with class include \
                   module statexp eval load pragma type library checksum \
-                  option alibrary java
+                  option alibrary java wasm
 
 MODULE_OBJ	= $(MODULE_FILE:%=Module/%.o)
 
@@ -142,7 +143,8 @@ TYPE_OBJ	= $(TYPE_FILE:%=Type/%.o)
 
 #*--- expand ----------------------------------------------------------*/
 EXPAND_FILE	= eps assert case define expander garith iarith farith \
-                  if initial lambda let map struct exit object mvalue
+                  if initial lambda let map struct exit object mvalue \
+                  callcc
 
 EXPAND_OBJ	= $(EXPAND_FILE:%=Expand/%.o)
 
@@ -165,6 +167,11 @@ FLOP_OBJ	= $(FLOP_FILE:%=Flop/%.o)
 COERCE_FILE	= walk pproto coerce app funcall apply convert
 
 COERCE_OBJ	= $(COERCE_FILE:%=Coerce/%.o)
+
+#*--- Prebox ----------------------------------------------------------*/
+PREBOX_FILE	= walk
+
+PREBOX_OBJ	= $(PREBOX_FILE:%=Prebox/%.o)
 
 #*--- Dataflow --------------------------------------------------------*/
 DATAFLOW_FILE	= walk
@@ -246,7 +253,7 @@ SAW_OBJ		= $(SAW_FILE:%=SawMill/%.o)
 #*--- SawBbv ----------------------------------------------------------*/
 SAW_BBV_FILE    = bbv bbv-types bbv-specialize bbv-cache bbv-utils \
                   bbv-range bbv-merge bbv-cost bbv-config bbv-liveness \
-                  bbv-optim bbv-debug
+                  bbv-optim bbv-debug bbv-profile bbv-gc
 
 SAW_BBV_OBJ	= $(SAW_BBV_FILE:%=SawBbv/%.o)
 
@@ -343,10 +350,15 @@ ISA_FILE	= walk
 
 ISA_OBJ	        = $(ISA_FILE:%=Isa/%.o)
 
-#*--- defus -----------------------------------------------------------*/
+#*--- liveness --------------------------------------------------------*/
 LIVENESS_FILE	= liveness set types
 
 LIVENESS_OBJ 	= $(LIVENESS_FILE:%=Liveness/%.o)
+
+#*--- peephole --------------------------------------------------------*/
+PEEPHOLE_FILE	= walk
+
+PEEPHOLE_OBJ 	= $(PEEPHOLE_FILE:%=Peephole/%.o)
 
 #*---------------------------------------------------------------------*/
 #*    The object files                                                 */
@@ -364,7 +376,7 @@ O_OBJECTS_NOIJ  = $(ENGINE_OBJ) $(WRITE_OBJ) $(READ_OBJ) \
                   $(ABOUND_OBJ) $(JAS_OBJ) $(BACKEND_OBJ) $(SAW_OBJ) \
                   $(SAW_C_OBJ) $(SAW_JVM_OBJ) $(SAW_BBV_OBJ) $(SYNC_OBJ) \
                   $(ISA_OBJ) $(RETURN_OBJ) $(STACKABLE_OBJ) $(UNCELL_OBJ) \
-                  $(LIVENESS_OBJ)
+                  $(LIVENESS_OBJ) $(PREBOX_OBJ) $(PEEPHOLE_OBJ)
 
 O_OBJECTS_NOINIT=$(O_OBJECTS_NOIJ)
 
@@ -438,13 +450,11 @@ jvm: .jfile
 	$(MAKE) jvm-sans-jfile
 
 jvm-sans-jfile: $(CLASS_OBJECTS)
-	@ echo "Linking..."
 	$(BIGLOO) $(EFLAGS) -jvm -jvm-jar -jvm-java $(JAVA) \
              -jvm-shell $(JSHELL) \
              -jvm-classpath $(CLASSPATH) -jvm-jarpath $(JARPATH) \
              $(BDISTFLAGS) -o $(BIGLOO_DEST).jvm $(CLASS_OBJECTS)
-	@ echo "$(BIGLOO_DEST).jvm done..."
-	@ echo "-------------------------------"
+	@ echo "\e[1;34m$(BIGLOO_DEST).jvm\e[0m done..."
 
 #*---------------------------------------------------------------------*/
 #*    distrib                                                          */
@@ -504,46 +514,40 @@ bigloo.$(SHAREDSUFFIX):
 #*    file.                                                            */
 #*---------------------------------------------------------------------*/
 $(BIGLOO_DEST)$(EXE_SUFFIX): .afile .etags $(O_OBJECTS) $(G_OBJECTS)
-	@ echo "Linking...bigloo$(EXE_SUFFIX)"
-	if [ "$(LDRPATHOPT) " != " " ]; then \
-	   $(BIGLOO) $(BBFLAGS) $(BFLAGS) $(EFLAGS) $(LDBOOTFLAGS) \
-	          -copt "$(EXTRA_LD_OPT) $(LDRPATHOPT)$(RPATH)" \
-	          -o $(BIGLOO_DEST).aux \
-	          $(O_OBJECTS) $(G_OBJECTS); \
-        else \
-	   $(BIGLOO) $(BBFLAGS) $(BFLAGS) $(EFLAGS) $(LDBOOTFLAGS) \
+ifeq ($(LDRPATHOPT),)
+	$(BIGLOO) $(BBFLAGS) $(BFLAGS) $(EFLAGS) $(LDBOOTFLAGS) \
 	          -copt "$(EXTRA_LD_OPT)" \
 	          -o $(BIGLOO_DEST).aux \
-	          $(O_OBJECTS) $(G_OBJECTS); \
-        fi
+	          $(O_OBJECTS) $(G_OBJECTS)
+else
+	$(BIGLOO) $(BBFLAGS) $(BFLAGS) $(EFLAGS) $(LDBOOTFLAGS) \
+	          -copt "$(EXTRA_LD_OPT) $(LDRPATHOPT)$(RPATH)" \
+	          -o $(BIGLOO_DEST).aux \
+	          $(O_OBJECTS) $(G_OBJECTS)
+endif
 	@ if [ $(HOSTOS) = "cygwin" ]; then \
 	    echo "Waiting a few seconds for the lock on $@ to be released..."; \
 	    sleep 5s; \
 	  fi
 	mv $(BIGLOO_DEST).aux $@
-	@ echo "$@ done..."
-	@ echo "-------------------------------"
+	@ echo "\e[1;34m$(@)\e[0m done..."
 
 #*---------------------------------------------------------------------*/
 #*    bigloo.new                                                       */
 #*---------------------------------------------------------------------*/
 $(BIGLOO_DEST).$(NEW_SUFFIX): .afile .etags $(O_OBJECTS) $(G_OBJECTS)
-	@ echo "Linking bigloo.new..."
 	$(BIGLOO) $(BBFLAGS) $(BFLAGS) $(EFLAGS) $(LDBOOTFLAGS) -o $@ \
               $(O_OBJECTS) $(G_OBJECTS)
-	@ echo "$@ done..."
-	@ echo "-------------------------------"
+	@ echo "\e[1;34m$(@)\e[0m done..."
 
 #*---------------------------------------------------------------------*/
 #*    bigloo.$(SHAREDSUFFIX)                                           */
 #*---------------------------------------------------------------------*/
 $(BIGLOO_DEST).$(SHAREDSUFFIX): $(O_OBJECTS) $(G_OBJECTS)
-	@ echo "Linking bigloo.$(SHAREDSUFFIX)..."
 	$(BIGLOO) $(BBFLAGS) $(BFLAGS) $(EFLAGS) -o $@ \
               $(O_OBJECTS) $(G_OBJECTS) \
               $(LDCSTRIPFLAGS)
-	@ echo "$@ done..."
-	@ echo "-------------------------------"
+	@ echo "\e[1;34m$(@)\e[0m done..."
 
 #*---------------------------------------------------------------------*/
 #*    mainnewo (for Bigloo++ regeneration)                             */
@@ -556,8 +560,7 @@ mainnewo: $(O_LESS_MAIN_OBJECTS_OBJECTS)
 #*    dist-bigloo.exe                                                  */
 #*---------------------------------------------------------------------*/
 dist-bigloo.exe: $(C_OBJECTS) Tools/date.c Tools/license.c
-	@ echo "Comptime (distribution) done..."
-	@ echo "-------------------------------"
+	@ echo "\e[1;35mComptime (distribution)\e[0m done..."
 
 #*---------------------------------------------------------------------*/
 #*    Tools/date.scm                                                   */
@@ -598,19 +601,15 @@ ude: Tools/date.scm Tools/license.scm .afile .jfile .etags
 
 .afile: $(SOURCE_FILES) Tools/license.scm
 	$(BGLAFILE) -o .afile $(SOURCE_FILES) Tools/license.scm
+	@ echo "\e[1;35m$(@)\e[0m done..."
 
 .jfile: .afile
 	$(BGLJFILE) -o .jfile $(SOURCE_FILES) Tools/license.scm
+	@ echo "\e[1;35m$(@)\e[0m done..."
 
 .etags: .afile
 	$(BGLTAGS) --define-var doc-define -o .etags $(SOURCE_FILES) Tools/license.scm
-
-#*---------------------------------------------------------------------*/
-#*    qnctags                                                          */
-#*---------------------------------------------------------------------*/
-.PHONY: qnctags
-qnctags:
-	etags `find . -name '*.scm' -print -o -name '*.[ch]' -print`
+	@ echo "\e[1;35m$(@)\e[0m done..."
 
 #*---------------------------------------------------------------------*/
 #*    dep                                                              */
@@ -629,7 +628,6 @@ dep: Tools/date.scm Tools/license.scm
 #*    the source files. Mostly we have to remove debug informations.   */
 #*---------------------------------------------------------------------*/
 dist-updates:
-	echo "updating Tools/trace.sc[hm]"
 	cat Tools/trace.sch | sed -e s/"#t"/"#f"/g > Tools/trace.schu; \
          $(RM) Tools/trace.sch; mv Tools/trace.schu Tools/trace.sch
 	cat Tools/trace.scm | sed -e s/"#t"/"#f"/g > Tools/trace.scmu; \
@@ -651,7 +649,7 @@ boot:
         else \
 	  $(MAKE) doboot.static SCMOBJSUFFIX="" COBJSUFFIX=%.o; \
 	fi
-	@ echo "$(BIGLOO_DEST)$(EXE_SUFFIX) done..."
+	@ echo "\e[1;34m$(BIGLOO_DEST)$(EXE_SUFFIX)\e[0m done..."
 
 doboot.shared: $(O_OBJECTS) $(G_OBJECTS)
 	$(CC) $(EXTRA_LD_OPT) $(CFLAGS) -o $(BIGLOO_DEST)$(EXE_SUFFIX) $(O_OBJECTS) $(G_OBJECTS) -L$(BOOTLIBDIR) $(LDBUILDOPTS) $(LDCOMPLIBS_SHARED) $(LDCOMPLIBS)
@@ -730,8 +728,6 @@ clean-jvm:
 	- $(RM) -f $(BIGLOO_DEST).jar
 
 clean: clean-common clean-c clean-jvm
-	@ echo "cleanup done..."
-	@ echo "-------------------------------"
 
 cleanall: clean
 	@ if [ `pwd` = $(HOME)/prgm/project/bigloo/comptime ]; then \
@@ -752,8 +748,6 @@ distclean:
 .PHONY: touchall
 touchall:
 	touch $(SOURCE_FILES)
-	@ echo "touchall done..."
-	@ echo "-------------------------------"
 
 #*---------------------------------------------------------------------*/
 #*    getsources                                                       */

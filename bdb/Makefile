@@ -3,8 +3,8 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Wed Aug  4 20:11:07 1999                          */
-#*    Last change :  Tue Mar 24 12:22:41 2020 (serrano)                */
-#*    Copyright   :  1999-2020 Manuel Serrano, see LICENSE file        */
+#*    Last change :  Wed Jun 26 15:01:47 2024 (serrano)                */
+#*    Copyright   :  1999-2024 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The bdb Makefile                                                 */
 #*=====================================================================*/
@@ -23,9 +23,13 @@ DIRECTORIES	= bdb blib
 #*---------------------------------------------------------------------*/
 #*    Booting bdb on a bare system                                     */
 #*---------------------------------------------------------------------*/
-boot:
-	@ (cd blib; $(MAKE) all)
-	@ (cd bdb; $(MAKE) MODE=final mode)
+boot: boot-blib boot-bdb
+
+boot-blib:
+	@ $(MAKE) -C blib all
+
+boot-bdb:
+	@ $(MAKE) -C bdb MODE=final mode
 
 #*---------------------------------------------------------------------*/
 #*    Populating bdb                                                   */
@@ -45,17 +49,17 @@ pop:
 
 clean:
 	@ for d in $(DIRECTORIES) ; do \
-             (cd $$d; $(MAKE) ROOT="$(ROOT)" clean); \
+             ($(MAKE) -C $$d ROOT="$(ROOT)" clean); \
           done;
 
 cleanall: 
 	@ for d in $(DIRECTORIES) ; do \
-             (cd $$d; $(MAKE) ROOT="$(ROOT)" cleanall); \
+             ($(MAKE) -C $$d ROOT="$(ROOT)" cleanall); \
           done;
 
 distclean: 
 	@ for d in $(DIRECTORIES) ; do \
-             (cd $$d; $(MAKE) ROOT="$(ROOT)" cleanall); \
+             ($(MAKE) -C $dd ROOT="$(ROOT)" cleanall); \
           done;
 
 

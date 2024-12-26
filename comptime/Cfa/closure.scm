@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Jun 27 11:35:13 1996                          */
-;*    Last change :  Sat Sep  4 15:17:27 2021 (serrano)                */
-;*    Copyright   :  1996-2021 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Tue Sep 24 09:26:06 2024 (serrano)                */
+;*    Copyright   :  1996-2024 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The closure optimization described in:                           */
 ;*                                                                     */
@@ -30,6 +30,7 @@
 	    type_cache
 	    tools_shape
 	    tools_speek
+	    backend_backend
 	    ast_var
 	    ast_node
 	    ast_env
@@ -42,6 +43,7 @@
 	    cfa_type)
    (export  (closure-optimization! ::pair-nil)
 	    (closure-optimization?)
+	    (unoptimized-closure?::bool ::sfun)
 	    (type-closures!)
 	    (add-procedure-ref!  ::node)
 	    (get-procedure-list::pair-nil)
@@ -56,6 +58,14 @@
 (define (closure-optimization?)
    (>=fx *optim* 2))
 
+;*---------------------------------------------------------------------*/
+;*    unoptimized-closure? ...                                         */
+;*---------------------------------------------------------------------*/
+(define (unoptimized-closure? fun)
+   (when (isa? fun intern-sfun/Cinfo)
+      (with-access::intern-sfun/Cinfo fun (strength the-closure-global)
+	 (and (global? the-closure-global) (eq? strength '???)))))
+   
 ;*---------------------------------------------------------------------*/
 ;*    closure-optimization! ...                                        */
 ;*---------------------------------------------------------------------*/
@@ -107,7 +117,7 @@
       (X! *funcall-list*)
       ;; and the T one
       (T-fix-point! *funcall-list*)
-      ;; mark all the light procedure
+      ;; mark all the light procedures
       (for-each (lambda (alloc)
 		   (with-access::make-procedure-app alloc (args T X)
 		      (let ((f (variable-value (var-variable (car args)))))
@@ -269,6 +279,7 @@
 		       'selfun))
 		(var-variable-set! fun *make-el-procedure*)
 		(var-type-set! fun *procedure-el*)
+		(variable-type-set! (sfun-the-closure sfun) *procedure-el*)
 		(set! type *procedure-el*))
 	       (else
 		(var-variable-set! fun *make-el-procedure*)
@@ -467,6 +478,15 @@
 ;*    type-closures! ...                                               */
 ;*---------------------------------------------------------------------*/
 (define (type-closures!)
+
+   (define backend-typed-closures
+      (with-access::backend (the-backend) (typed-closures)
+	 typed-closures))
+   
+   (define (bigloo-type::type ty::type)
+      (if backend-typed-closures
+	  (get-bigloo-defined-type ty)
+	  *obj*))
    
    (define (set-type! app::make-procedure-app)
       (with-access::make-procedure-app app (X T args)
@@ -477,19 +497,19 @@
 ;* 	    (for-each (lambda (a)                                      */
 ;* 			 (tprint "  a=" (shape a)))                    */
 ;* 	       (cdr (sfun-args sfun))))                                */
-	 (unless (or X T)
+	 (unless (or X (and backend-typed-closures T))
 	    ;; a non optimized procedure
 	    (let* ((var (var-variable (car args)))
 		   (sfun (variable-value var)))
 	       (variable-type-set! var
-		  (get-bigloo-defined-type (variable-type var)))
+		  (bigloo-type (variable-type var)))
 	       (for-each (lambda (a)
 			    (let* ((p (svar/Cinfo-approx (variable-value a)))
 				   (t (approx-type p)))
 			       ;; see type-node! ::funcall/Cinfo (type.scm)
 			       ;; for the funcall patching;
 			       ;; non-optimized closures return boxed values
-			       (variable-type-set! a (get-bigloo-defined-type t))))
+			       (variable-type-set! a (bigloo-type t))))
 		  (cdr (sfun-args sfun)))))))
 
    (when *optim-cfa-unbox-closure-args*

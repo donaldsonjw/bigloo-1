@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Sun Feb 19 10:35:59 1995                          */
-;*    Last change :  Thu Nov  3 11:45:38 2022 (serrano)                */
-;*    Copyright   :  1995-2022 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Tue Oct  1 09:23:11 2024 (serrano)                */
+;*    Copyright   :  1995-2024 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    A cache to be able to recognize function call very fast.         */
 ;*=====================================================================*/
@@ -33,6 +33,7 @@
 	    *make-fx-procedure*
 	    *make-va-procedure*
 	    *make-l-procedure*
+	    *long->bint*
 	    *double->real*
 	    *elong->belong*
 	    *llong->bllong*
@@ -65,6 +66,7 @@
 (define *make-fx-procedure* #f)
 (define *make-va-procedure* #f)
 (define *make-l-procedure* #f)
+(define *long->bint* #f)
 (define *double->real* #f)
 (define *elong->belong* #f)
 (define *llong->bllong* #f)
@@ -100,9 +102,9 @@
 	  (set! *string->ucs2string*
 		(get-global/module 'c-utf8-string->ucs2-string 'foreign))
 	  (set! *bstring->symbol*
- 		(get-global/module 'c-bstring->symbol 'foreign))
+ 		(get-global/module 'string->symbol '__r4_symbols_6_4))
 	  (set! *bstring->keyword*
-		(get-global/module 'c-bstring->keyword 'foreign))
+		(get-global/module 'string->keyword '__r4_symbols_6_4))
 	  (set! *bool->bbool*
 		(get-global/module '$bool->bbool 'foreign))
 	  (set! *long->int*
@@ -113,6 +115,8 @@
 		(get-global/module 'make-va-procedure 'foreign))
 	  (set! *make-l-procedure*
 		(get-global/module 'make-l-procedure 'foreign))
+	  (set! *long->bint*
+		(get-global/module '$long->bint 'foreign))
 	  (set! *double->real*
 		(get-global/module '$double->real 'foreign))
 	  (set! *elong->belong*
@@ -156,6 +160,7 @@
    (set! *long->int* #f)
    (set! *make-fx-procedure* #f)
    (set! *make-va-procedure* #f)
+   (set! *long->bint* #f)
    (set! *double->real* #f)
    (set! *cons* #f)
    (set! *btrue* #f)

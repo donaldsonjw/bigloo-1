@@ -31,7 +31,7 @@
 
 (define *comment* #f)
 (define *trace* #f)
-(define *count* #f)
+(define *count* (let ((n (getenv "BIGLOOSAWPROFILE"))) (equal? n "true")))
 (define *inline-simple-macros* #t)
 (define *counter* 0)
 (define *hasprotect* #f)
@@ -48,6 +48,7 @@
    (if *count*
        (begin (display "extern int bbcount[];\n")
 	      (display "extern char *bbname[];\n")
+	      (display "extern char *bbfun[];\n")
 	      (display "extern obj_t PRINT_TRACE(obj_t);\n\n") ))
 
    (display "\n") )
@@ -61,10 +62,17 @@
    (if *count*
        (begin (display* "int bbcount[" *counter* "];\n")
 	      (display* "char *bbname[" *counter* "];\n")
+	      (display* "char *bbfun[" *counter* "];\n")
 	      (display "obj_t PRINT_TRACE(obj_t r) {\n")
 	      (display "\tint i;\n")
-	      (display* "\tfor(i=0;i<" *counter* ";i++)\n")
-	      (display "\t\tprintf(\"%d\t%d\\n\",bbcount[i],i);\n")
+	      (display "\tputs(\"[\");\n")
+	      (display* "\tfor(i=0;i<" *counter* ";i++) {\n")
+	      (display "\t\tif (bbname[i]) {\n")
+	      (display "\t\t\tprintf(\"\t{\\\"fun\\\": \\\"%s\\\", \\\"id\\\": %s, \\\"count\\\": %d},\\n\", bbfun[i], bbname[i],bbcount[i]);\n")
+	      (display "\t\t}\n")
+	      (display "\t}\n")
+	      (display "\tprintf(\"\tnull\\n\");\n")
+	      (display "\tputs(\"]\");\n")
 	      (display "\treturn(BIGLOO_EXIT(r));\n")
 	      (display "}\n") )))
 
@@ -101,7 +109,8 @@
 	       (if *haspushbefore* (display " struct befored befored;\n"))
 	       (declare-regs locals)
 	       (if *trace* (display* "printf(\"" id "=" name "\\n\");\n")) ))))
-   (genbody l)
+   (with-access::global v (id)
+      (genbody l id))
    (display (make-string *pushtraceemmited* #\}))
    (display "\n}\n\n") )
 
@@ -163,19 +172,21 @@
 		    (display ";\n") ))
 	     l ))
 
-(define (genbody l) ;(list block)
+(define (genbody l funid) ;(list block)
    (for-each (lambda (b)
-		(out-label (block-label b))
+		(out-label (block-label b) funid)
 		(let ( (l (block-first b)) )
 		   (if (location? (find-location (car l))) (print ""))
 		   (for-each gen-ins l) ))
 	     l ))
 
-(define (out-label label)
+(define (out-label label funid)
    (display* "L" label ":")
-   (if *count*
-       (begin (display* "\tbbcount[" *counter* "]++;")
-	      (set! *counter* (+ 1 *counter*)) ))
+   (when *count*
+       (display* "\tbbcount[" *counter* "]++;\n")
+       (display* "\tbbname[" *counter* "] = \"" label "\";\n");
+       (display* "\tbbfun[" *counter* "] = \"" funid "\";\n");
+       (set! *counter* (+ 1 *counter*)) )
    (if *trace* (display* "\tprintf(\"" label "\\n\"); ")) )
 
 (define (print-location? loc)
@@ -242,7 +253,8 @@
 ;; Special cases of gen-expr
 ;;
 (define-method (gen-expr fun::rtl_lightfuncall args);
-   (gen-Xfuncall "L_" args #f) )
+   (with-access::rtl_lightfuncall fun (rettype)
+      (gen-Xfuncall "L_" rettype args #f)) )
 
 (define-method (gen-expr fun::rtl_getfield args);
    (display "BGL_SAW_GETFIELD(")
@@ -272,11 +284,11 @@
        (begin (display "(VA_PROCEDUREP(")
 	      (gen-reg (car args))
 	      (display ") ? ")
-	      (gen-Xfuncall "" args #t)
+	      (gen-Xfuncall "" *obj* args #t)
 	      (display " : ")
-	      (gen-Xfuncall "" args #f)
+	      (gen-Xfuncall "" *obj* args #f)
 	      (display ")") )
-       (gen-Xfuncall "" args #t) ) )
+       (gen-Xfuncall "" *obj* args #t) ) )
 
 (define (typename o)
    (cond
@@ -289,16 +301,18 @@
       (else
        "obj_t")))
        
-(define (gen-Xfuncall type args eoa?);()
-   (when *stdc*
-      (display
-	 (if eoa?
-	     "((obj_t (*)(obj_t, ...))"
-	     (format "((obj_t (*)(~(, )))"
-		(map typename args)))))
-   (display* "PROCEDURE_" type "ENTRY(")
+(define (gen-Xfuncall strength rettype args eoa?);
+   (if *stdc*
+       (display
+	  (if eoa?
+	      (format "((~a (*)(obj_t, ...))" (type-name rettype))
+	      (format "((~a (*)(~(, )))"
+		 (typename rettype)
+		 (map typename args))))
+       (display* "((" (type-name rettype) " (*)())"))
+   (display* "PROCEDURE_" strength "ENTRY(")
    (gen-reg (car args))
-   (display (if *stdc* "))(" ")("))
+   (display "))(")
    (gen-args args)
    (if eoa? (display ", BEOA"))
    (display ")") )
@@ -315,21 +329,27 @@
 
 ;;
 (define-method (gen-expr fun::rtl_pragma args);
-   (emit-pragma (rtl_pragma-format fun) args)
-   (display "") )
+   (with-access::rtl_pragma fun (srfi0)
+      (if (eq? srfi0 'bigloo-c)
+	  (begin
+	     (emit-pragma (rtl_pragma-format fun) args)
+	     (display "") )
+	  (display "BUNSPEC"))))
 
 ;;
 (define-method (gen-expr fun::rtl_switch args);
-   (let ( (pats (rtl_switch-patterns fun)) )
+   (let* ( (pats (rtl_switch-patterns fun))
+	   (reg (car args))
+	   (treg (rtl_switch-type fun)) )
       (display "switch(")
-      (gen-reg (car args))
+      (gen-reg reg)
       (display ") {")
       (for-each (lambda (pat lab)
 		   (if (eq? pat 'else)
 		       (display "\n\t default: ")
 		       (for-each (lambda (n)
 				    (display "\n\t case ")
-				    (emit-atom-value n)
+				    (emit-atom-value n treg)
 				    (display ":") )
 			  pat ))
 		   (display* " goto L" (block-label lab) ";") )
@@ -421,13 +441,14 @@
    "" )
 
 (define-method (gen-prefix fun::rtl_loadi) ;()
-   (emit-atom-value (atom-value (rtl_loadi-constant fun))) )
+   (let ((i (rtl_loadi-constant fun)))
+      (emit-atom-value (atom-value i) (atom-type i))) )
 
 (define-method (gen-prefix fun::rtl_loadg) ;()
    (display (gname (rtl_loadg-var fun))) )
 
 (define-method (gen-prefix fun::rtl_loadfun) ;()
-   (display* "(obj_t) " (gname (rtl_loadfun-var fun))) )
+   (display* "(function_t) " (gname (rtl_loadfun-var fun))) )
 
 (define-method (gen-prefix fun::rtl_storeg) ;()
    (display* (gname (rtl_storeg-var fun)) ", ") )

@@ -32,7 +32,8 @@ reason they are presented in a separate section @ref{Input and Output}.
 * Serialization::              
 * Bit Manipulation::            
 * Weak Pointers::
-* Hash Tables::   
+* Hash Tables::
+* Misc. Algorithms::
 * System Programming::
 * Date::
 * Digest::
@@ -41,7 +42,7 @@ reason they are presented in a separate section @ref{Input and Output}.
 @end menu
 
 @c ------------------------------------------------------------------- @c
-@c    Base Library                                                     @c
+@c    Scheme Library                                                   @c
 @c ------------------------------------------------------------------- @c
 @node Scheme Library, Input and Output, , Standard Library
 @comment  node-name,  next,  previous,  up
@@ -2245,6 +2246,11 @@ bound variables.
 @c    Hash tables                                                      @c
 @c ------------------------------------------------------------------- @c
 @include hash.texi
+
+@c ------------------------------------------------------------------- @c
+@c    Misc algo                                                        @c
+@c ------------------------------------------------------------------- @c
+@include algo.texi
 
 @c ------------------------------------------------------------------- @c
 @c    System                                                           @c

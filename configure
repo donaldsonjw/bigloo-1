@@ -4,9 +4,9 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Tue Jan 25 16:05:10 1994                          */
-#*    Last change :  Sat Dec  9 13:36:07 2023 (serrano)                */
+#*    Last change :  Fri Dec 13 10:22:11 2024 (serrano)                */
 #*    Last change :  Thu May 14 09:43:33 2020 (serrano)                */
-#*    Copyright   :  1994-2023 Manuel Serrano, see LICENSE file        */
+#*    Copyright   :  1994-2024 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The Bigloo configuration file                                    */
 #*    -------------------------------------------------------------    */
@@ -17,11 +17,11 @@
 #*---------------------------------------------------------------------*/
 #*    Bigloo revision number                                           */
 #*---------------------------------------------------------------------*/
-release=4.5b
-buildrelease=4.5a-1
+release=4.6a
+buildrelease=unstable
 version=
 bigloourl=http://www-sop.inria.fr/indes/fp/Bigloo
-biglooftp=ftp://ftp-sop.inria.fr/indes/fp/Bigloo
+bigloohttp=http://www-sop.inria.fr/indes/fp/Bigloo/download
 
 bigloosvn=ssh://hop@hop.inria.fr/bigloo
 
@@ -87,7 +87,6 @@ cpicflags="demanded" # Possible values for cpicflags are:
              #  - blank (uninitalized) for automatic configuration of the
 #    position independent code compiler option
 cnanflags=-DBGL_NAN_TAGGING=0
-creservedflags=-DBGL_RESERVED_TAGGING=0
 as=          # left blank for autoconfiguration
 ar=          # left blank for autoconfiguration
 ranlib=      # left blank for autoconfiguration
@@ -281,7 +280,8 @@ libuvconfigureopt=
 #* libuvversion=v1.40.0                                                */
 #* libuvversion=v1.43.0                                                */
 #* libuvversion=v1.44.2                                                */
-libuvversion=v1.47.0
+#libuvversion=v1.47.0
+libuvversion=v1.48.0
 
 #*--- phidget (left blank for autoconfiguration) ----------------------*/
 phidget=
@@ -483,6 +483,7 @@ bigloo_static_h=
 bigloo_config_h=
 bigloo_config_jvm=
 bigloo_config_sch=
+bconfigure_generic_sch=
 summary=yes
 java_configured=no
 os=posix
@@ -525,14 +526,12 @@ while : ; do
       sharedcompiler=no;
       sharedbde=yes;
       infodir=$HOME/house/info;
-      java=java11;
-      javac=javac11;
       ld=gcc;
       cflags="$cflags -Wpointer-arith -Wswitch -Wtrigraphs -Wno-alloca-larger-than -DBGL_BOOTCONFIG";
       coflags="$coflags";
       cfpflags="$cfpflags";
-      bootflags="$bootflags -cg";
-      jvmbackend="no";
+      bootflags="$bootflags -cg +rm";
+      jvmbackend="yes";
       mode=standard;
       configureinfo="yes";
       bee="full";
@@ -753,6 +752,9 @@ while : ; do
 
     --a.bat=*)
       abat="`echo $1 | sed 's/^[^=]*=//'`";;
+
+    --jvm)
+      jvmbackend=yes;;
 
     --jvm=*)
       jvmbackend="`echo $1 | sed 's/^[^=]*=//'`";;
@@ -1172,7 +1174,7 @@ while : ; do
       cd $bootdir;
       echo "Bigloo compiler:"  >&2;
       echo "   --native=yes|no [default yes]" >&2;
-      echo "   --jvm=yes|no|force [default no]" >&2;
+      echo "   --jvm[=yes|no|force] [default no]" >&2;
       echo "   --bee=partial|full [default partial]" >&2;
       echo "" >&2;
       echo "API:" >&2;
@@ -1332,6 +1334,9 @@ else
   echo=echo
 fi
 
+# config.status
+$echo "Configuring with \"$logopt\"..." > config.status
+
 # buildbindir
 if [ "$buildbindir " = " " ]; then
   buildbindir=$bootdir/bin
@@ -1389,6 +1394,11 @@ fi
 # The bigloo_config.sch file
 if [ "$bigloo_config_sch " = " " ]; then
   bigloo_config_sch=lib/bigloo/$release/bigloo_config.sch
+fi
+
+# The bconfigure-generic.sch file
+if [ "$bconfigure_generic_sch " = " " ]; then
+  bconfigure_generic_sch=runtime/Llib/bconfigure-generic.sch
 fi
 
 # The bigloo_bmacs.el file
@@ -1733,14 +1743,14 @@ bootbigloobindir=`dirname $bootbigloo 2> /dev/null`
 if [ $bootmethod = "source" ]; then
   mkdir -p download
   if [ ! -f download/bigloo-$buildrelease.tar.gz ]; then
-    echo "downloading bigloo $buildrelease from $biglooftp"
-    wget $biglooftp/bigloo-$buildrelease.tar.gz -O download/bigloo-$buildrelease.tar.gz
+    echo "downloading bigloo $buildrelease from $bigloohttp"
+    wget $bigloohttp/bigloo-$buildrelease.tar.gz -O download/bigloo-$buildrelease.tar.gz
   else
     echo "using downloaded image \"download/bigloo-$buildrelease.tar.gz\""
   fi
 
   if [ $? != 0 ]; then
-    echo "command failed \"wget $biglooftp/bigloo-$buildrelease -o download/bigloo-$buildrelease.tar.gz\""
+    echo "command failed \"wget $bigloohttp/bigloo-$buildrelease -o download/bigloo-$buildrelease.tar.gz\""
     rm -f download/bigloo-$buildrelease.tar.gz
     wget --help > /dev/null 2> /dev/null
     
@@ -1902,8 +1912,8 @@ case $hostos in
       sysdlldirstr=`$echo $sysdlldir | sed -e 's|\\\\|\\\\\\\\|g'`
     fi
 
-    jvmrecettebootpath="-classpath \".;../lib/bigloo/$release/bigloo_s.zip;objs_jvm\""
-    jvmapibootpath="\".;../../../../../lib/bigloo/$release/bigloo_s.zip\""
+    jvmrecettebootpath="-classpath \".;$(BOOTLIBDIR)/bigloo_s.zip;objs_jvm\""
+    jvmapibootpath="\".;$(BOOTLIBDIR)/bigloo_s.zip\""
 
     ldopt="no-share"
 
@@ -2290,15 +2300,6 @@ if [ "$action" != "bigloo_config_el" ]; then
     fi
   fi
 
-  if [ "$bglreservedtagging " != "0 " ]; then
-    if [ "$alignment" = "3" ]; then 
-      creservedflags="-DBGL_RESERVED_TAGGING=1";
-    else
-      $echo "*** ERROR: Reserved-tagging requires 64bit platforms"
-      exit 1
-    fi
-  fi
-     
   $echo "+ GC configuration ($customgc)..." >> $configurelog
   
   cgcflags="`$autoconf gcflags` $cgcflags" || exit 1
@@ -2474,6 +2475,8 @@ fi
 if [ "$libuv_is_enabled " = "yes " -a "$customlibuv " = "yes " ]; then
   $echo ""
 
+  $autoconfdir/tools || exit 1
+  
   $echo "+ Installing custom libuv ($libuvversion) source code."
   (cd libuv; . ./install-libuv) || exit 1
   
@@ -2810,32 +2813,16 @@ if [ "$regexp " = " " ]; then
   if [ "$pcre2libs " != "no " ]; then
     extralibs="-l$extrapcre2 $extralibs"
     regexp=pcre2
-    regexpscm=pcre.scm
-    regexpc=pcre.c
   elif [ "$pcrelibs " != "no " ]; then
     extralibs="-l$extrapcre $extralibs"
     regexp=pcre
-    regexpscm=pcre.scm
-    regexpc=pcre.c
 
     if [ `$autoconf pcrefreestudy` = "yes" ]; then
       regexphasfreestudy=1
     fi
   else
     regexp=pregexp
-    regexpscm=pregexp.scm
-    regexpc=pregexp.c
   fi
-fi
-
-$echo ";; generated file (from $regexpscm), don't edit (`date`)" > runtime/Unsafe/regexp.scm
-cat runtime/Unsafe/$regexpscm >>  runtime/Unsafe/regexp.scm
-
-if [ -f runtime/objs/obj_u/Unsafe/$regexpc ]; then
-  $echo "/* generated file (from $regexpc), don't edit (`date`) */" > runtime/objs/obj_u/Unsafe/regexp.c
-  cat runtime/objs/obj_u/Unsafe/$regexpc >> runtime/objs/obj_u/Unsafe/regexp.c
-else
-  touch runtime/objs/obj_u/Unsafe/regexp.c
 fi
 
 featureflags="-srfi enable-$regexp $featureflags"
@@ -2915,7 +2902,7 @@ if [ "$libbacktrace " != "no " ]; then
     libbacktracelibs="-lbacktrace"
     havelibbacktrace=1;
     featureflags="-srfi enable-libbacktrace $featureflags";
-    extralibbacktrace=libbacktrace
+    extralibbacktrace=backtrace
     libbacktracebuildpath="\$(BOOTDIR)/libbacktrace\$(LIBDIR)/\$(FILDIR)"
     ldbuildopts="-L$bootdir/libbacktrace$libdir/$fildir $ldbuildopts"
     #lcustomflags="-L$bootdir/libbacktrace$libdir/$fildir $lcustomflags"
@@ -2945,6 +2932,7 @@ if [ "$libbacktrace " != "no " ]; then
     fi
   else
     havelibbacktrace=1;
+    libbacktracelibs="-l$extralibbacktrace"
     featureflags="-srfi enable-libbacktrace $featureflags";
   fi
 else
@@ -3014,7 +3002,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
 
   # Tell what we are doing
   $echo ""
-  $echo "configuring $bigloo_config_h, $bigloo_config_jvm, $bigloo_config_sch:"
+  $echo "configuring $bigloo_config_h, $bigloo_config_jvm, $bigloo_config_sch, $bconfigure_generic_sch:"
 
   # The C compiler options
   cbraflags=`$autoconf ccbracket` || exit 1
@@ -3342,6 +3330,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
     fi
   fi
 
+  int_sign_bit=`$autoconf signbit --type=int --alignment="$alignment"` || exit 1
   long_sign_bit=`$autoconf signbit --type=long --alignment="$alignment"` || exit 1
   elong_sign_bit=`$autoconf signbit --type=long --alignment=0` || exit 1
   llong_sign_bit=`$autoconf signbit --type="$longlong" --alignment=0` || exit 1
@@ -3662,8 +3651,8 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
     ostmp=/tmp
   fi
 
-  # bigloo_config_h, bigloo_config_jvm, bigloo_config_sch, bigloo.sh
-  for p in $bigloo_config_h $bigloo_config_jvm $bigloo_config_sch bigloo.sh bglafile.sh bgltags.sh bgljfile.sh bgldepend.sh bglmco.sh bglrun.sh bglld.sh bglmake.sh bglprof.sh bglpp.sh bgljas.sh; do
+  # bigloo_config_h, bigloo_config_jvm, bigloo_config_sch, bconfigure_generic_sch, bigloo.sh
+  for p in $bigloo_config_h $bigloo_config_jvm $bigloo_config_sch $bconfigure_generic_sch bigloo.sh bglafile.sh bgljfile.sh bgltags.sh bgljfile.sh bgldepend.sh bglmco.sh bglrun.sh bglld.sh bglmake.sh bglprof.sh bglpp.sh bgljas.sh; do
     if [ "$p " != " " ]; then
       rm -f $p 2> /dev/null
       rel=`$echo $release | sed -e "s|[.]|_|"`;
@@ -3734,6 +3723,7 @@ if [ $action = "all" -o $action = "bigloo_config" ]; then
               -e "s|@BGL_HAVE_LONGLONG@|$havelonglong|" \
               -e "s|@BGL_LONG_LIMBS@|$long_limbs|" \
               -e "s|@BGL_LONGLONG_LIMBS@|$longlong_limbs|" \
+              -e "s|@C_INT_SIGN_BIT@|$int_sign_bit|" \
               -e "s|@C_LONG_SIGN_BIT@|$long_sign_bit|" \
               -e "s|@C_ELONG_SIGN_BIT@|$elong_sign_bit|" \
               -e "s|@C_LLONG_SIGN_BIT@|$llong_sign_bit|" \
@@ -3970,7 +3960,7 @@ fi
 #*    bigloo_static.h                                                  */
 #*---------------------------------------------------------------------*/
 if [ $action = "all" -o $action = "bigloo_static" ]; then
-  $echo "/* Generated file, don't edit */" > $bigloo_static_h
+  $echo "/* Generated file (configure), don't edit */" > $bigloo_static_h
   $echo "" >> $bigloo_static_h
   $echo "#define BGL_ELONG_PREALLOC_MIN $belong_prealloc_min" >> $bigloo_static_h
   $echo "#define BGL_ELONG_PREALLOC_MAX $belong_prealloc_max" >> $bigloo_static_h
@@ -3978,32 +3968,32 @@ if [ $action = "all" -o $action = "bigloo_static" ]; then
   max=`expr $belong_prealloc_max - 1`;
   i=$belong_prealloc_min
   while expr $i "<" $max > /dev/null; do
-    $echo "  { .header = MAKE_HEADER( ELONG_TYPE, ELONG_SIZE ), .val = $i }, " >> $bigloo_static_h
+    $echo "  { .header = BGL_MAKE_HEADER(ELONG_TYPE, ELONG_SIZE), .val = $i }, " >> $bigloo_static_h
     i=`expr $i + 1`;
   done
-  $echo "  { .header = MAKE_HEADER( ELONG_TYPE, ELONG_SIZE ), .val = $i } }; " >> $bigloo_static_h
+  $echo "  { .header = BGL_MAKE_HEADER(ELONG_TYPE, ELONG_SIZE), .val = $i } }; " >> $bigloo_static_h
   $echo "" >> $bigloo_static_h
-  $echo "#if( !defined( BGL_CNST_SHIFT_INT32 ) )" >> $bigloo_static_h
+  $echo "#if (!defined(BGL_CNST_SHIFT_INT32 ))" >> $bigloo_static_h
   $echo "#define BGL_INT32_PREALLOC_MIN $belong_prealloc_min" >> $bigloo_static_h
   $echo "#define BGL_INT32_PREALLOC_MAX $belong_prealloc_max" >> $bigloo_static_h
   $echo "static struct bgl_sint32 bint32_allocated[] = { " >> $bigloo_static_h
   max=`expr $belong_prealloc_max - 1`;
   i=$belong_prealloc_min
   while expr $i "<" $max > /dev/null; do
-    $echo "  { .header = MAKE_HEADER( INT32_TYPE, BGL_INT32_SIZE ), .val = $i }, " >> $bigloo_static_h
+    $echo "  { .header = BGL_MAKE_HEADER(INT32_TYPE, BGL_INT32_SIZE), .val = $i }, " >> $bigloo_static_h
     i=`expr $i + 1`;
   done
-  $echo "  { .header = MAKE_HEADER( INT32_TYPE, BGL_INT32_SIZE ), .val = $i } }; " >> $bigloo_static_h
+  $echo "  { .header = BGL_MAKE_HEADER(INT32_TYPE, BGL_INT32_SIZE), .val = $i } }; " >> $bigloo_static_h
   $echo "" >> $bigloo_static_h
   $echo "#define BGL_UINT32_PREALLOC_MAX $belong_prealloc_max" >> $bigloo_static_h
   $echo "static struct bgl_uint32 buint32_allocated[] = { " >> $bigloo_static_h
   max=`expr $belong_prealloc_max - 1`;
   i=0
   while expr $i "<" $max > /dev/null; do
-    $echo "  { .header = MAKE_HEADER( UINT32_TYPE, BGL_UINT32_SIZE ), .val = $i }, " >> $bigloo_static_h
+    $echo "  { .header = BGL_MAKE_HEADER(UINT32_TYPE, BGL_UINT32_SIZE), .val = $i }, " >> $bigloo_static_h
     i=`expr $i + 1`;
   done
-  $echo "  { .header = MAKE_HEADER( UINT32_TYPE, BGL_UINT32_SIZE ), .val = $i } }; " >> $bigloo_static_h
+  $echo "  { .header = BGL_MAKE_HEADER(UINT32_TYPE, BGL_UINT32_SIZE), .val = $i } }; " >> $bigloo_static_h
   $echo "#endif" >> $bigloo_static_h
 fi
 
@@ -4865,6 +4855,7 @@ if [ $action = "all" -o $action = "Makefile.config" ]; then
       $echo "LIBBACKTRACEBOOTINCDIR=$bootdir/libbacktrace/libbacktrace-$libbacktraceversion" >> $makefile_cfg
     else
       $echo "LIBBACKTRACECUSTOM=no" >> $makefile_cfg
+      $echo "LIBBACKTRACECUSTOMVERSION=$libbacktraceversion" >> $makefile_cfg
       $echo "LIBBACKTRACEBOOTINCDIR=." >> $makefile_cfg
     fi
 
@@ -5394,7 +5385,7 @@ fi
 #*---------------------------------------------------------------------*/
 #*    Generate the config.status file for debian packages              */
 #*---------------------------------------------------------------------*/
-$echo "configuration completed" > config.status
+$echo "configuration completed" >> config.status
 
 #*---------------------------------------------------------------------*/
 #*    Ok, we are done now                                              */

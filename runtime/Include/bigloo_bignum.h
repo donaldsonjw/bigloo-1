@@ -3,8 +3,8 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Wed Jul 26 08:58:25 2017                          */
-/*    Last change :  Mon Dec  6 09:55:15 2021 (serrano)                */
-/*    Copyright   :  2017-22 Manuel Serrano                            */
+/*    Last change :  Thu Dec 12 11:45:51 2024 (serrano)                */
+/*    Copyright   :  2017-24 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    Bigloo BIGNUMs                                                   */
 /*=====================================================================*/
@@ -31,7 +31,7 @@ BGL_RUNTIME_DECL obj_t bgl_string_to_bignum(char *, int);
 /*---------------------------------------------------------------------*/
 struct bgl_bignum {
    header_t header;
-#if (BGL_HAVE_GMP)
+#if (BGL_HAVE_GMP && !BGL_BOOT)
    /* from gmp.h */
    __mpz_struct mpz;
    void *mp_d;
@@ -52,7 +52,7 @@ struct bgl_bignum {
 /*---------------------------------------------------------------------*/
 /*    Bignum                                                           */
 /*---------------------------------------------------------------------*/
-#if (BGL_HAVE_GMP)   
+#if (BGL_HAVE_GMP && !BGL_BOOT)   
 #  define BXSIZ(o) (BIGNUM(o).mpz._mp_size)
    
 #  define BXZERO(x) (BXSIZ(x) == 0)
@@ -92,12 +92,17 @@ extern obj_t bgl_safe_mul_llong(BGL_LONGLONG_T, BGL_LONGLONG_T);
 extern obj_t bgl_safe_quotient_llong(BGL_LONGLONG_T, BGL_LONGLONG_T);
 #else
 #  define BGL_BIGNUM_U16VECT(bx) (BIGNUM(bx).u16vect)
-
-#  define BGL_SAFE_BX_TO_FX(x) (x)
-#  define BGL_SAFE_PLUS_FX(x, y) BINT((x) + (y))
-#  define BGL_SAFE_MINUS_FX(x, y) BINT((x) - (y))
-#  define BGL_SAFE_MUL_FX(x, y) BINT((x) * (y))
-#  define BGL_SAFE_QUOTIENT_FX(x, y) BINT((x) / (y))
+// since bigloo4.6a, the fx-functions are implemented in bignumber-generic.sch
+extern obj_t BGL_SAFE_BX_TO_FX(obj_t);
+extern obj_t BGL_SAFE_PLUS_FX(long, long);
+extern obj_t BGL_SAFE_MINUS_FX(long, long);
+extern obj_t BGL_SAFE_MUL_FX(long, long);
+extern obj_t BGL_SAFE_QUOTIENT_FX(long, long);
+/* #  define BGL_SAFE_BX_TO_FX(x) (x)                                  */
+/* #  define BGL_SAFE_PLUS_FX(x, y) BINT((x) + (y))                    */
+/* #  define BGL_SAFE_MINUS_FX(x, y) BINT((x) - (y))                   */
+/* #  define BGL_SAFE_MUL_FX(x, y) BINT((x) * (y))                     */
+/* #  define BGL_SAFE_QUOTIENT_FX(x, y) BINT((x) / (y))                */
 #  define BGL_SAFE_PLUS_ELONG(x, y) ELONG_TO_BELONG((x) + (y))
 #  define BGL_SAFE_MINUS_ELONG(x, y) ELONG_TO_BELONG((x) - (y))
 #  define BGL_SAFE_MUL_ELONG(x, y) ELONG_TO_BELONG((x) * (y))

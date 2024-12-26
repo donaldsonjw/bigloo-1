@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Sun Jul  5 11:13:01 1992                          */
-;*    Last change :  Mon Jan 14 14:01:03 2019 (serrano)                */
+;*    Last change :  Mon Sep  9 18:15:47 2024 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    6.10.3 Output (page 31, r4)                                      */
 ;*    -------------------------------------------------------------    */
@@ -23,7 +23,11 @@
 ;*---------------------------------------------------------------------*/
 (module __r4_output_6_10_3
 
-   (import  __error
+   (cond-expand
+      ((and (not bigloo-c) (not bigloo-jvm))
+       (include "Ieee/output-generic.sch")))
+   
+    (import  __error
 	    __bexit
 	    __r4_ports_6_10_1
 	    __r4_numbers_6_5_flonum_dtoa
@@ -585,20 +589,20 @@
 ;*---------------------------------------------------------------------*/
 (define (format fmt . obj)
    (let ((p (open-output-string)))
-      (xprintf 'format p fmt obj)
+      (xprintf "format" p fmt obj)
       (close-output-port p)))
 
 ;*---------------------------------------------------------------------*/
 ;*    printf ...                                                       */
 ;*---------------------------------------------------------------------*/
 (define (printf fmt . obj)
-   (xprintf 'printf (current-output-port) fmt obj))
+   (xprintf "printf" (current-output-port) fmt obj))
 
 ;*---------------------------------------------------------------------*/
 ;*    fprintf ...                                                      */
 ;*---------------------------------------------------------------------*/
 (define (fprintf port fmt . obj)
-   (xprintf 'fprintf port fmt obj))
+   (xprintf "fprintf" port fmt obj))
 
 ;*---------------------------------------------------------------------*/
 ;*    %write/display-2 ...                                             */
@@ -840,7 +844,7 @@
 	    ($string-bound-check? end (+fx (string-length obj) 1))
 	    (>=fx start 0))
        ($display-substring obj start end port)
-       (error 'display-substring
+       (error "display-substring"
 	      (format "Illegal index, start=~a end=~a" start end)
 	      obj)))
 

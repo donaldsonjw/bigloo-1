@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/comptime/Type/typeof.scm             */
+;*    serrano/prgm/project/bigloo/bigloo/comptime/Type/typeof.scm      */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri May 31 15:25:05 1996                          */
-;*    Last change :  Fri Apr 21 18:39:45 2017 (serrano)                */
-;*    Copyright   :  1996-2017 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Mon May 27 10:40:46 2024 (serrano)                */
+;*    Copyright   :  1996-2024 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The type of the things                                           */
 ;*=====================================================================*/
@@ -186,6 +186,8 @@
        #t)
       ((eq? t2 *pair-nil*)
        (or (eq? t1 *pair*) (eq? t1 *epair*) (eq? t1 *nil*)))
+      ((eq? t2 *pair*)
+       (eq? t1 *epair*))
       ((or (tclass? t1) (tclass? t2))
        (type-subclass? t1 t2))
       ((and (not (bigloo-type? t1)) (not (bigloo-type? t2)))

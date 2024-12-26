@@ -64,7 +64,7 @@
 @ifinfo
 This file documents Bigloo, a Functional Programming Language.
 
-Copyright (C) 1992-99, 2000-22 Manuel Serrano
+Copyright (C) 1992-2024 Manuel Serrano
 
 @display
 This program is free software; you can redistribute it            
@@ -120,7 +120,7 @@ MA 02111-1307, USA.
 
 @c @unnumbered Copyright
 
-Copyright @copyright{} 1992-99, 2000-02 Manuel Serrano
+Copyright @copyright{} 1992-2024 Manuel Serrano
 
 @display
 This program is free software; you can redistribute it            
@@ -209,6 +209,7 @@ Bigloo @value{bigloovers}, @value{bigloodate}
 * Compiler Description::           Interfacing with the compiler
 * Cross Compilation::              Compiling for different platforms
 * User Extensions::                User compiler extensions
+* Memory Profiling::               Memory profiling
 * Bee::                            The Bigloo development environment
 * Global Index::                   Global Bigloo document index
 * Library Index::                  Index for forms, functions and variables
@@ -560,6 +561,11 @@ and keyword functions.
 @c    Extension                                                        @c
 @c ------------------------------------------------------------------- @c
 @include extension.texi
+
+@c ------------------------------------------------------------------- @c
+@c    pmem                                                             @c
+@c ------------------------------------------------------------------- @c
+@include pmem.texi
 
 @c ------------------------------------------------------------------- @c
 @c    Bee                                                              @c

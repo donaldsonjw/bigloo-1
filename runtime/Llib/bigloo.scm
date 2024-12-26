@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Jan 20 08:24:40 1995                          */
-;*    Last change :  Sun May 28 06:51:37 2023 (serrano)                */
+;*    Last change :  Fri Nov  8 07:27:16 2024 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    The bigloo runtime utility functions                             */
 ;*=====================================================================*/
@@ -60,23 +60,23 @@
 	    (macro $procedure-length::int (::procedure)
 		   "PROCEDURE_LENGTH")
 
-	    (macro $make-procedure::procedure (::obj ::int ::int)
+	    (macro $make-procedure::procedure (::funptr ::int ::int)
 		   "bgl_make_procedure")
 	    (macro $dup-procedure::procedure (::procedure)
 		   "bgl_dup_procedure")
 	    
-	    (macro make-fx-procedure::procedure (::obj ::int ::int)
+	    (macro make-fx-procedure::procedure (::funptr ::int ::int)
 		   "MAKE_FX_PROCEDURE")		 
-	    (macro make-va-procedure::procedure (::obj ::int ::int)
+	    (macro make-va-procedure::procedure (::funptr ::int ::int)
 		   "MAKE_VA_PROCEDURE")
 	    
-	    (macro make-stack-fx-procedure::procedure (::obj ::int ::int)
+	    (macro make-stack-fx-procedure::procedure (::funptr ::int ::int)
 		   "BGL_MAKE_STACK_FX_PROCEDURE")		 
 	    
 	    (macro make-el-procedure::procedure-el (::int)
 		   "MAKE_EL_PROCEDURE")	 
 	    
-	    (macro make-l-procedure::procedure (::obj ::int)
+	    (macro make-l-procedure::procedure-l (::funptr ::int)
 		   "MAKE_L_PROCEDURE")		 
 	    					 
 	    (macro procedure-set!::obj (::procedure ::int ::obj)
@@ -89,15 +89,22 @@
 	    (macro $procedure-attr::obj (::procedure)
 		   "PROCEDURE_ATTR")			 
 
-	    (macro procedure-l-set!::obj (::obj ::int ::obj)
+	    (macro procedure-l-set!::obj (::procedure-l ::int ::obj)
 		   "PROCEDURE_L_SET")		  
-	    (macro procedure-l-ref::obj (::obj ::int)
+	    (macro procedure-l-ref::obj (::procedure-l ::int)
 		   "PROCEDURE_L_REF")
 	    
 	    (macro procedure-el-set!::obj (::procedure-el ::int ::obj)
 		   "PROCEDURE_EL_SET")		 
 	    (macro procedure-el-ref::obj (::procedure-el ::int)
 		   "PROCEDURE_EL_REF")
+
+	    (macro $make-unsafe-cell::unsafe-cell (::obj)
+		   "BGL_MAKE_UNSAFE_CELL")
+	    (macro $unsafe-cell-ref::obj (::unsafe-cell)
+		   "BGL_UNSAFE_CELL_REF")
+	    (macro $unsafe-cell-set!::obj (::unsafe-cell ::obj)
+		   "BGL_UNSAFE_CELL_SET")
 	    
 	    (macro $make-cell::cell (::obj)
 		   "MAKE_YOUNG_CELL")
@@ -193,7 +200,7 @@
 	       (method static make-el-procedure::procedure-el (::int)
 		       "MAKE_EL_PROCEDURE")	 
 	       
-	       (method static make-l-procedure::procedure (::obj ::int)
+	       (method static make-l-procedure::procedure-l (::obj ::int)
 		       "MAKE_L_PROCEDURE")		 
 	       
 	       (method static procedure-set!::obj (::procedure ::int ::obj)
@@ -206,9 +213,9 @@
 	       (method static $procedure-attr::obj (::procedure)
 		       "PROCEDURE_ATTR")
 	       
-	       (method static procedure-l-set!::obj (::procedure ::int ::obj)
+	       (method static procedure-l-set!::obj (::procedure-l ::int ::obj)
 		       "PROCEDURE_L_SET")		  
-	       (method static procedure-l-ref::obj (::procedure ::int)
+	       (method static procedure-l-ref::obj (::procedure-l ::int)
 		       "PROCEDURE_L_REF")
 	       
 	       (method static procedure-el-set!::obj (::procedure-el ::int ::obj)
@@ -226,6 +233,13 @@
 		       "CELL_REF")
 	       (method static $cell?::bool (::obj)
 		       "CELLP")
+	       
+	       (method static $make-unsafe-cell::unsafe-cell (::obj)
+		       "BGL_MAKE_UNSAFE_CELL")
+	       (method static $unsafe-cell-set!::obj (::unsafe-cell ::obj)
+		       "BGL_UNSAFE_CELL_SET")
+	       (method static $unsafe-cell-ref::obj (::unsafe-cell)
+		       "BGL_UNSAFE_CELL_REF")
 	       
 	       (method static c-cnst?::bool (::obj)
 		       "CNSTP")
@@ -565,7 +579,7 @@
 	       (if (=fx r clen)
 		   ;; we still have to check the checksum
 		   (if (=fx checksum (get-8bits-integer r))
-		       (values (substring new 0 w) (+fx r 3))
+		       (values (substring new 0 w) (+fx r 3)) 
 		       (err))
 		   (let ((c (string-ref string r)))
 		      (if (char=? c #\z)
@@ -692,7 +706,11 @@
 ;*---------------------------------------------------------------------*/
 (define (time proc)
    (if (correct-arity? proc 0)
-       ($time proc)
+       (cond-expand
+	  ((or bigloo-c bigloo-jvm)
+	   ($time proc))
+	  (else
+	   (values (proc) 0 0 0)))
        (error 'time "Wrong procedure arity" proc)))
 
 ;*---------------------------------------------------------------------*/

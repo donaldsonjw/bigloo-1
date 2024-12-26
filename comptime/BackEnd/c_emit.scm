@@ -1,10 +1,10 @@
 ;*=====================================================================*/
-;*    .../prgm/project/bigloo/bigloo/comptime/BackEnd/c_emit.scm       */
+;*    serrano/prgm/project/bigloo/wasm/comptime/BackEnd/c_emit.scm     */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Thu Mar 16 18:14:47 1995                          */
-;*    Last change :  Mon Apr  3 15:34:57 2023 (serrano)                */
-;*    Copyright   :  1995-2023 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Thu Sep 26 08:40:13 2024 (serrano)                */
+;*    Copyright   :  1995-2024 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The emission of the C code                                       */
 ;*=====================================================================*/
@@ -37,7 +37,7 @@
 	    (emit-dlopen-init ::global ::bstring)
 	    (untrigraph::bstring ::bstring)
 	    (llong->c-iso::bstring ::llong)
-	    (emit-atom-value value)))
+	    (emit-atom-value value ::type)))
 
 ;*---------------------------------------------------------------------*/
 ;*    *dest-prefix* ...                                                */
@@ -278,7 +278,7 @@
 ;*---------------------------------------------------------------------*/
 ;*    emit-atom-value ...                                              */
 ;*---------------------------------------------------------------------*/
-(define (emit-atom-value value)
+(define (emit-atom-value value type)
    (cond
       ((boolean? value)
        (display "((" *c-port*)
@@ -349,8 +349,11 @@
        (display (untrigraph (string-for-read value)) *c-port*)
        (display #\" *c-port*))
       ((fixnum? value)
+       (when (<fx value 0) (display "(" *c-port*))
        (display value *c-port*)
-       (display "L" *c-port*))
+       (unless (eq? type *int*) 
+	  (display "L" *c-port*))
+       (when (<fx value 0) (display ")"  *c-port*)))
 ;*        (display "((" *c-port*)                                      */
 ;*        (display (string-sans-$ (type-name *long*)) *c-port*)        */
 ;*        (display ")" *c-port*)                                       */

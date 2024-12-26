@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue Jul  2 13:17:04 1996                          */
-;*    Last change :  Sat Jun 25 10:38:06 2022 (serrano)                */
-;*    Copyright   :  1996-2022 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Fri Nov  8 08:51:30 2024 (serrano)                */
+;*    Copyright   :  1996-2024 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The C production code.                                           */
 ;*=====================================================================*/
@@ -514,15 +514,22 @@
    (trace (cgen 3)
 	  "(node->cop node::pragma kont): " (shape node) #\Newline
 	  "  kont: " kont #\Newline)
-   (with-access::pragma node (format effect expr*)
-      (if (and (string-null? format)
-	       (pair? expr*)
-	       (null? (cdr expr*))
-	       (isa? (car expr*) var))
-	  (with-access::var (car expr*) (variable)
-	     (with-access::variable variable (name)
-		(extern->cop name #f node kont inpushexit)))
-	  (extern->cop format #f node kont inpushexit))))
+   (with-access::pragma node (format effect expr* srfi0 loc)
+      (if (eq? srfi0 'bigloo-c)
+	  (if (and (string-null? format)
+		   (pair? expr*)
+		   (null? (cdr expr*))
+		   (isa? (car expr*) var))
+	      (with-access::var (car expr*) (variable)
+		 (with-access::variable variable (name)
+		    (extern->cop name #f node kont inpushexit)))
+	      (extern->cop format #f node kont inpushexit))
+	  (begin
+	     (tprint "############## IGNORING PRAGMA " srfi0)
+	     (instantiate::catom
+		(type type)
+		(value 0)
+		(loc loc))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    node->cop ::private ...                                          */
@@ -821,7 +828,10 @@
 		    (alloc (instantiate::cpragma
 			      (type *_*)
 			      (loc loc)
-			      (format (format "struct bgl_cell ~a"
+			      (format (format "~a ~a"
+					 (if *optim-unsafe-cell?*
+					     "struct bgl_unsafe_cell"
+					     "struct bgl_cell")
 					 (variable-name decl)))
 			      (args '()))))
 		(set! stackable decl)
@@ -1128,10 +1138,10 @@
    (trace (cgen 3)
 	  "(node->cop node::box-ref kont): " (shape node) #\Newline
 	  "  kont: " kont #\Newline)
-   (with-access::box-ref node (var loc)
+   (with-access::box-ref node (var loc type)
       (kont (node->cop var
 	       (lambda (v) (instantiate::cbox-ref
-			      (type (cop-type v))
+			      (type type)
 			      (loc loc)
 			      (var v)))
 	        inpushexit))))

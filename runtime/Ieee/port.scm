@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Mon Feb 20 16:53:27 1995                          */
-;*    Last change :  Wed Oct 11 14:03:04 2023 (serrano)                */
+;*    Last change :  Tue May 14 12:12:27 2024 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    6.10.1 Ports (page 29, r4)                                       */
 ;*    -------------------------------------------------------------    */
@@ -101,7 +101,9 @@
 	    ($open-input-substring!::input-port (::bstring ::long ::long) "bgl_open_input_substring_bang")
 	    ($open-input-mmap::input-port (::mmap ::bstring ::long ::long) "bgl_open_input_mmap")
 	    ($open-input-procedure::input-port (::procedure ::bstring) "bgl_open_input_procedure")
+	    ($input-port-timeout::long (::input-port) "bgl_input_port_timeout")
 	    ($input-port-timeout-set!::bool (::input-port ::long) "bgl_input_port_timeout_set")
+	    ($output-port-timeout::long (::output-port) "bgl_output_port_timeout")
 	    ($output-port-timeout-set!::bool (::output-port ::long) "bgl_output_port_timeout_set")
 	    ($open-output-file::obj (::bstring ::bstring) "bgl_open_output_file")
 	    ($append-output-file::obj (::bstring ::bstring) "bgl_append_output_file")
@@ -267,14 +269,18 @@
 		  "bgl_open_input_substring")
 	       (method static $open-input-substring!::input-port (::bstring ::int ::int)
 		  "bgl_open_input_substring_bang")
-	       (method static $open-input-mmap::obj (::mmap ::bstring ::long ::long)
+	       (method static $open-input-mmap::input-port (::mmap ::bstring ::long ::long)
 		  "bgl_open_input_mmap")
                (method static $input-mmap-port?::bool (::obj)
 		   "INPUT_MMAP_PORTP")
 	       (method static $open-input-procedure::obj (::procedure ::bstring)
 		  "bgl_open_input_procedure")
+	       (method static $input-port-timeout::long (::input-port)
+		  "bgl_input_port_timeout")
 	       (method static $input-port-timeout-set!::bool (::input-port ::long)
 		  "bgl_input_port_timeout_set")
+	       (method static $output-port-timeout::long (::output-port)
+		  "bgl_output_port_timeout")
 	       (method static $output-port-timeout-set!::bool (::output-port ::long)
 		  "bgl_output_port_timeout_set")
 	       (method static $open-output-file::obj (::bstring ::bstring)
@@ -468,14 +474,16 @@
 	    (open-input-procedure ::procedure #!optional (bufinfo #t))
 	    (open-input-gzip-port ::input-port  #!optional (bufinfo #t))
 	    
+	    (inline input-port-timeout::long ::input-port)
 	    (inline input-port-timeout-set! ::input-port ::long)
+	    (inline output-port-timeout::long ::output-port)
+	    (inline output-port-timeout-set! ::output-port ::long)
 	    (inline open-input-c-string ::string)
 	    (inline reopen-input-c-string ::input-port ::string)
 	    (open-output-file ::bstring #!optional (bufinfo #t))
 	    (append-output-file ::bstring #!optional (bufinfo #t))
 	    (open-output-string::output-port #!optional (bufinfo #t))
 	    (open-output-procedure ::procedure #!optional (flush::procedure (lambda () #f)) (bufinfo #t) (close::procedure (lambda () #f)))
-	    (inline output-port-timeout-set! ::output-port ::long)
 	    (inline closed-input-port?::bool ::input-port)
 	    (inline close-input-port ::input-port)
 	    (inline get-output-string::bstring ::output-port)
@@ -1145,11 +1153,11 @@
       ((>fx end (elong->fixnum (mmap-length mmap)))
        (error "open-input-mmap" "End offset out of bounds" end))
       (else
-       (let ((buffer (get-port-buffer "open-input-file" #f
+       (let ((buffer (get-port-buffer "open-input-mmap" #f
 			(if (<fx (-fx end start) c-default-io-bufsiz)
 			    (-fx end start)
 			    c-default-io-bufsiz))))
-	  ($open-input-mmap mmap buffer start end)))))
+          ($open-input-mmap mmap buffer start end)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    open-input-procedure ...                                         */
@@ -1178,10 +1186,22 @@
    ($reopen-input-c-string port string))
 
 ;*---------------------------------------------------------------------*/
+;*    input-port-timeout ...                                           */
+;*---------------------------------------------------------------------*/
+(define-inline (input-port-timeout::long port::input-port)
+   ($input-port-timeout port))
+
+;*---------------------------------------------------------------------*/
 ;*    input-port-timeout-set! ...                                      */
 ;*---------------------------------------------------------------------*/
 (define-inline (input-port-timeout-set! port::input-port timeout::long)
    ($input-port-timeout-set! port timeout))
+
+;*---------------------------------------------------------------------*/
+;*    output-port-timeout ...                                          */
+;*---------------------------------------------------------------------*/
+(define-inline (output-port-timeout::long port::output-port)
+   ($output-port-timeout port))
 
 ;*---------------------------------------------------------------------*/
 ;*    open-output-file ...                                             */

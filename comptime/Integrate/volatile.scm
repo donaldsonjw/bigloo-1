@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Sat Jun 12 08:55:10 2021                          */
-;*    Last change :  Fri Jul  9 14:43:08 2021 (serrano)                */
-;*    Copyright   :  2021 Manuel Serrano                               */
+;*    Last change :  Fri Jul 12 19:08:27 2024 (serrano)                */
+;*    Copyright   :  2021-24 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    Flag as "volatile" local variables that survive a set-exit       */
 ;*    node. This is used only when  *local-exit?* is true.             */
@@ -21,6 +21,7 @@
 	    ast_var
 	    ast_node
 	    ast_walk
+	    ast_shrinkify
 	    liveness_liveness
 	    tools_shape
 	    tools_speek)
@@ -35,20 +36,24 @@
 ;*    temporaries in registers.                                        */
 ;*---------------------------------------------------------------------*/
 (define (volatile! global)
-   (with-access::global global (value id)
-      (multiple-value-bind (def use)
-	 (liveness-sfun! value)
+   (with-trace 'integrate "volatile"
+      (trace-item "global=" (shape global))
+      (with-access::global global (value id)
 	 (with-access::sfun value (body)
 	    (when (use-set-exit? body)
-	       (volatile body '())))))
-   global)
+	       (multiple-value-bind (def use)
+		  (liveness-sfun! value)
+		  (volatile body '())
+		  (shrink-node! body)))))
+      global))
 
 ;*---------------------------------------------------------------------*/
 ;*    volalite-sfun ...                                                */
 ;*---------------------------------------------------------------------*/
 (define (volatile-sfun node env)
-   (with-access::sfun node (args body)
-      (volatile body (append args env))))
+   (with-trace 'integrate "volatile-sfun"
+      (with-access::sfun node (args body)
+	 (volatile body (append args env)))))
    
 ;*---------------------------------------------------------------------*/
 ;*    volatile ::node ...                                              */

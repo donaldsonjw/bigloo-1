@@ -3,7 +3,7 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Jan 20 10:06:37 1995                          */
-;*    Last change :  Thu Jul 20 07:20:43 2023 (serrano)                */
+;*    Last change :  Thu Dec 12 08:43:46 2024 (serrano)                */
 ;*    -------------------------------------------------------------    */
 ;*    6.5. Numbers (page 18, r4) The `fixnum' functions                */
 ;*=====================================================================*/
@@ -13,8 +13,13 @@
 ;*---------------------------------------------------------------------*/
 (module __r4_numbers_6_5_fixnum
    
-   (import  __error
-	    __param)
+    (cond-expand
+      ((and (not bigloo-c) (not bigloo-jvm))
+       (include "Ieee/fixnum-generic.sch")))
+   
+    (import  __error
+	     __param
+	     __bignum)
    
    (use     __type
 	    __bigloo
@@ -30,8 +35,6 @@
 	    __r4_pairs_and_lists_6_3
 	    
 	    __evenv)
-
-   (include "Ieee/bignum.sch")
 
    (extern (macro $fixnum?::bool (::obj) "INTEGERP")
 	   (macro $elong?::bool (::obj) "ELONGP")
@@ -142,12 +145,13 @@
 	   (infix macro $>=u64::bool (::uint64 ::uint64) ">=")
 	   (macro $evenfx?::bool (::long) "EVENP_FX")
 	   (macro $oddfx?::bool (::long) "ODDP_FX")
+	   ;; warning, the second argument of $*fx/ov and $*fx/ov-ov is ::long
 	   (macro $+fx/ov::bool (::bint ::bint ::bint) "BGL_ADDFX_OV")
-	   (macro $-fx/ov::bool (::bint ::bint ::bint) "BGL_SUBFX_OV")
-	   (macro $*fx/ov::bool (::bint ::long ::bint) "BGL_MULFX_OV")
 	   (macro $+fx/w-ov::bint (::bint ::bint) "BGL_ADDFX_SANS_OV")
+	   (macro $-fx/ov::bool (::bint ::bint ::bint) "BGL_SUBFX_OV")
 	   (macro $-fx/w-ov::bint (::bint ::bint) "BGL_SUBFX_SANS_OV")
-	   (macro $*fx/w-ov::bint (::bint ::long) "BGL_MULFX_SANS_OV")
+	   (macro $*fx/ov::bool (::bint ::bint ::bint) "BGL_MULFX_OV")
+	   (macro $*fx/w-ov::bint (::bint ::bint) "BGL_MULFX_SANS_OV")
 	   (infix macro $+fx::long (::long ::long) "+")
 	   (infix macro $+elong::elong (::elong ::elong) "+")
 	   (infix macro $+llong::llong (::llong ::llong) "+")
@@ -633,7 +637,6 @@
 	    (inline uint32?::bool ::obj)
 	    (inline int64?::bool ::obj)
 	    (inline uint64?::bool ::obj)
-	    (inline bignum?::bool ::obj)
  	    (inline make-elong::belong ::long)
 	    (inline make-llong::bllong ::long)
 	    
@@ -693,12 +696,6 @@
 	    (inline int64->uint64::uint64 ::int64)
 	    (inline uint64->int64::int64 ::uint64)
 	    
-	    (inline fixnum->bignum::bignum ::long)
-	    (inline bignum->fixnum::long ::bignum)
-	    (inline bignum->elong::elong ::bignum)
-	    (inline bignum->llong::llong ::bignum)
-	    (inline elong->bignum::bignum ::elong)
-	    (inline llong->bignum::bignum ::llong)
 	    (inline minvalfx::long)
 	    (inline maxvalfx::long)
 	    (inline minvalelong::elong)
@@ -716,7 +713,6 @@
 	    (inline =u32::bool ::uint32 ::uint32)
 	    (inline =s64::bool ::int64 ::int64)
 	    (inline =u64::bool ::uint64 ::uint64)
-	    (inline =bx::bool ::bignum ::bignum)
  	    (inline >fx::bool ::long ::long)
 	    (inline >elong::bool ::elong ::elong)
 	    (inline >llong::bool ::llong ::llong)
@@ -728,7 +724,6 @@
 	    (inline >u32::bool ::uint32 ::uint32)
 	    (inline >s64::bool ::int64 ::int64)
 	    (inline >u64::bool ::uint64 ::uint64)
-	    (inline >bx::bool ::bignum ::bignum)
  	    (inline >=fx::bool ::long ::long)
 	    (inline >=elong::bool ::elong ::elong)
 	    (inline >=llong::bool ::llong ::llong)
@@ -740,7 +735,6 @@
 	    (inline >=u32::bool ::uint32 ::uint32)
 	    (inline >=s64::bool ::int64 ::int64)
 	    (inline >=u64::bool ::uint64 ::uint64)
-	    (inline >=bx::bool ::bignum ::bignum)
  	    (inline <fx::bool ::long ::long)
 	    (inline <elong::bool ::elong ::elong)
 	    (inline <llong::bool ::llong ::llong)
@@ -752,7 +746,6 @@
 	    (inline <u32::bool ::uint32 ::uint32)
 	    (inline <s64::bool ::int64 ::int64)
 	    (inline <u64::bool ::uint64 ::uint64)
-	    (inline <bx::bool ::bignum ::bignum)
  	    (inline <=fx::bool ::long ::long)
 	    (inline <=elong::bool ::elong ::elong)
 	    (inline <=llong::bool ::llong ::llong)
@@ -764,7 +757,6 @@
 	    (inline <=u32::bool ::uint32 ::uint32)
 	    (inline <=s64::bool ::int64 ::int64)
 	    (inline <=u64::bool ::uint64 ::uint64)
-	    (inline <=bx::bool ::bignum ::bignum)
  	    (inline zerofx?::bool ::long)
 	    (inline zeroelong?::bool ::elong)
 	    (inline zerollong?::bool ::llong)
@@ -776,7 +768,6 @@
 	    (inline zerou32?::bool ::uint32)
 	    (inline zeros64?::bool ::int64)
 	    (inline zerou64?::bool ::uint64)
-	    (inline zerobx?::bool ::bignum)
  	    (inline positivefx?::bool ::long)
 	    (inline positiveelong?::bool ::elong)
 	    (inline positivellong?::bool ::llong)
@@ -788,7 +779,6 @@
 	    (inline positiveu32?::bool ::uint32)
 	    (inline positives64?::bool ::int64)
 	    (inline positiveu64?::bool ::uint64)
-	    (inline positivebx?::bool ::bignum)
  	    (inline negativefx?::bool ::long)
 	    (inline negativeelong?::bool ::elong)
 	    (inline negativellong?::bool ::llong)
@@ -800,7 +790,6 @@
 	    (inline negativeu32?::bool ::uint32)
 	    (inline negatives64?::bool ::int64)
 	    (inline negativeu64?::bool ::uint64)
-	    (inline negativebx?::bool ::bignum)
  	    (odd?::bool ::obj)
 	    (inline oddfx?::bool ::long)
 	    (inline oddelong?::bool ::elong)
@@ -813,7 +802,6 @@
 	    (inline oddu32?::bool ::uint32)
 	    (inline odds64?::bool ::int64)
 	    (inline oddu64?::bool ::uint64)
-	    (inline oddbx?::bool ::bignum)
  	    (even?::bool ::obj)
 	    (inline evenfx?::bool ::long)
 	    (inline evenelong?::bool ::elong)
@@ -826,7 +814,6 @@
 	    (inline evenu32?::bool ::uint32)
 	    (inline evens64?::bool ::int64)
 	    (inline evenu64?::bool ::uint64)
-	    (inline evenbx?::bool ::bignum)
  	    (minfx::long ::long . pair)
 	    (minelong::elong ::elong . pair)
 	    (minllong::llong ::llong . pair)
@@ -838,7 +825,6 @@
  	    (minu32::uint32 ::uint32 . pair)
  	    (mins64::int64 ::int64 . pair)
  	    (minu64::uint64 ::uint64 . pair)
-	    (minbx::bignum ::bignum . pair)
  	    (maxfx::long ::long . pair)
 	    (maxelong::elong ::elong . pair)
 	    (maxllong::llong ::llong . pair)
@@ -850,7 +836,6 @@
  	    (maxu32::uint32 ::uint32 . pair)
  	    (maxs64::int64 ::int64 . pair)
  	    (maxu64::uint64 ::uint64 . pair)
-	    (maxbx::bignum ::bignum . pair)
  	    (inline +fx::long ::long ::long)
  	    (inline +fx/ov::obj ::bint ::bint)
 	    (inline +elong::elong ::elong ::elong)
@@ -863,7 +848,6 @@
  	    (inline +u32::uint32 ::uint32 ::uint32)
  	    (inline +s64::int64 ::int64 ::int64)
  	    (inline +u64::uint64 ::uint64 ::uint64)
-	    (inline +bx::bignum ::bignum ::bignum)
  	    (inline -fx::long ::long ::long)
  	    (inline -fx/ov::obj ::bint ::bint)
 	    (inline -elong::elong ::elong ::elong)
@@ -876,7 +860,6 @@
  	    (inline -u32::uint32 ::uint32 ::uint32)
  	    (inline -s64::int64 ::int64 ::int64)
  	    (inline -u64::uint64 ::uint64 ::uint64)
-	    (inline -bx::bignum ::bignum ::bignum)
  	    (inline *fx::long ::long ::long)
  	    (inline *fx/ov::obj ::bint ::bint)
 	    (inline *elong::elong ::elong ::elong)
@@ -889,8 +872,8 @@
  	    (inline *u32::uint32 ::uint32 ::uint32)
  	    (inline *s64::int64 ::int64 ::int64)
  	    (inline *u64::uint64 ::uint64 ::uint64)
-	    (inline *bx::bignum ::bignum ::bignum)
  	    (inline /fx::long ::long ::long)
+ 	    (inline /fx/ov::obj ::bint ::bint)
 	    (inline /elong::elong ::elong ::elong)
 	    (inline /llong::llong ::llong ::llong)
 	    (inline /s8::int8 ::int8 ::int8)
@@ -901,7 +884,6 @@
  	    (inline /u32::uint32 ::uint32 ::uint32)
  	    (inline /s64::int64 ::int64 ::int64)
  	    (inline /u64::uint64 ::uint64 ::uint64)
-	    (inline /bx::bignum ::bignum ::bignum)
  	    (inline negfx::long ::long)
 	    (inline negelong::elong ::elong)
 	    (inline negllong::llong ::llong)
@@ -913,7 +895,6 @@
 	    (inline negu32::uint32 ::uint32)
 	    (inline negs64::int64 ::int64)
 	    (inline negu64::uint64 ::uint64)
-	    (inline negbx::bignum ::bignum)
  	    (inline absfx::long ::long)
 	    (inline abselong::elong ::elong)
 	    (inline absllong::llong ::llong)
@@ -925,7 +906,6 @@
 	    (inline absu32::uint32 ::uint32)
 	    (inline abss64::int64 ::int64)
 	    (inline absu64::uint64 ::uint64)
-	    (inline absbx::bignum ::bignum)
  	    (remainder::obj ::obj ::obj)
 	    (inline remainderfx::long ::long ::long)
 	    (inline remainderelong::elong ::elong ::elong)
@@ -938,7 +918,6 @@
 	    (inline remainderu32::uint32 ::uint32 ::uint32)
 	    (inline remainders64::int64 ::int64 ::int64)
 	    (inline remainderu64::uint64 ::uint64 ::uint64)
-	    (inline remainderbx::bignum ::bignum ::bignum)
  	    (quotient::obj ::obj ::obj)
 	    (inline quotientfx::long ::long ::long)
 	    (inline quotientelong::elong ::elong ::elong)
@@ -951,7 +930,6 @@
 	    (inline quotientu32::uint32 ::uint32 ::uint32)
 	    (inline quotients64::int64 ::int64 ::int64)
 	    (inline quotientu64::uint64 ::uint64 ::uint64)
-	    (inline quotientbx::bignum ::bignum ::bignum)
  	    (modulo::obj ::obj ::obj)
 	    (modulofx::long ::long ::long)
 	    (moduloelong::elong ::elong ::elong)
@@ -964,7 +942,6 @@
 	    (modulou32::uint32 ::uint32 ::uint32)
 	    (modulos64::int64 ::int64 ::int64)
 	    (modulou64::uint64 ::uint64 ::uint64)
-	    (modulobx::bignum ::bignum ::bignum)
  	    (gcd::obj . pair)
 	    (gcdfx::long . pair)
 	    (gcdelong::elong . pair)
@@ -977,7 +954,6 @@
 	    (gcdu32::uint32 . pair)
 	    (gcds64::int64 . pair)
 	    (gcdu64::uint64 . pair)
-	    (gcdbx::bignum . pair)
  	    (lcm::obj . pair)
 	    (lcmfx::long . pair)
 	    (lcmelong::elong . pair)
@@ -990,13 +966,12 @@
 	    (lcmu32::uint32 . pair)
 	    (lcms64::int64 . pair)
 	    (lcmu64::uint64 . pair)
-	    (lcmbx::bignum . pair)
 	    (exptfx::long ::long ::long)
+	    (exptfx/ov::obj ::long ::long)
 	    (expts32::int32 ::int32 ::int32)
 	    (exptu32::uint32 ::uint32 ::uint32)
 	    (expts64::int64 ::int64 ::int64)
 	    (exptu64::uint64 ::uint64 ::uint64)
-	    (inline exptbx::bignum ::bignum ::bignum)
 	    (integer->string::bstring ::long #!optional (radix::long 10))
 	    (fixnum->string::bstring ::long #!optional (radix::long 10))
 	    (integer->string/padding::bstring ::long ::long #!optional (radix::long 10))
@@ -1006,13 +981,8 @@
 	    (string->elong::elong ::bstring #!optional (radix::long 10))
 	    (llong->string::bstring ::llong . pair)
 	    (string->llong::llong ::bstring #!optional (radix::long 10))
-	    (bignum->string::bstring ::bignum #!optional (radix::long 10))
-	    (string->bignum::bignum ::bstring #!optional (radix::long 10))
-	    (bignum->octet-string::bstring ::bignum)
-	    (octet-string->bignum::bignum ::bstring)
 	    (string->integer-obj::obj ::bstring ::long)
  	    (inline random::long ::long)
- 	    (inline randombx::bignum ::bignum)
 	    (seed-random! ::int))
    
    (pragma  (fixnum? no-alloc (predicate-of bint) no-cfa-top nesting fail-safe)
@@ -1027,15 +997,8 @@
 	    ($uint32? no-alloc side-effect-free (predicate-of buint32) no-cfa-top nesting (effect) fail-safe)	
 	    ($int64? no-alloc side-effect-free (predicate-of bint64) no-cfa-top nesting (effect) fail-safe)	
 	    ($uint64? no-alloc side-effect-free (predicate-of buint64) no-cfa-top nesting (effect) fail-safe)	
-	    (bignum? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    ($elong->llong no-alloc side-effect-free args-safe (effect) fail-safe)
 	    ($llong->elong no-alloc side-effect-free args-safe (effect) fail-safe)
-	    (fixnum->bignum side-effect-free no-cfa-top nesting (effect))
-	    (bignum->fixnum no-alloc side-effect-free no-cfa-top nesting (effect))
-	    (bignum->elong no-alloc side-effect-free no-cfa-top nesting (effect))
-	    (bignum->llong no-alloc side-effect-free no-cfa-top nesting (effect))
-	    (elong->bignum side-effect-free no-cfa-top nesting (effect))
-	    (llong->bignum side-effect-free no-cfa-top nesting (effect))
 	    (integer? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (=fx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (=elong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1048,7 +1011,6 @@
 	    (=u32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (=s64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (=u64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (=bx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (>fx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (>elong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (>llong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1060,7 +1022,6 @@
 	    (>u32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (>s64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (>u64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (>bx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (>=fx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (>=elong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (>=llong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1072,7 +1033,6 @@
 	    (>=u32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (>=s64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (>=u64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (>=bx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (<fx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (<elong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (<llong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1084,7 +1044,6 @@
 	    (<u32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (<s64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (<u64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (<bx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (<=fx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (<=elong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (<=llong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1096,7 +1055,6 @@
 	    (<=u32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (<=s64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (<=u64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (<=bx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (odd? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (odds8? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (oddu8? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1106,7 +1064,6 @@
 	    (oddu32? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (odds64? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (oddu64? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (oddbx? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    ($oddfx? no-alloc side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
  	    (even? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (evens8? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1117,7 +1074,6 @@
 	    (evenu32? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (evens64? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (evenu64? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (evenbx? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    ($evenfx? no-alloc side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
  	    (+fx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (+elong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1130,7 +1086,6 @@
  	    (+u32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (+s64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (+u64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (+bx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (-fx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (-elong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (-llong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1142,7 +1097,6 @@
  	    (-u32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (-s64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (-u64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (-bx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (*fx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (*elong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (*llong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1154,7 +1108,6 @@
  	    (*u32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (*s64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (*u64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (*bx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (/fx no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (/elong no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (/llong no-alloc side-effect-free no-cfa-top nesting (effect))
@@ -1166,7 +1119,6 @@
  	    (/u32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (/s64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (/u64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (/bx no-alloc side-effect-free no-cfa-top nesting (effect))
  	    (remainderfx no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (remainderelong no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (remainderllong no-alloc side-effect-free no-cfa-top nesting (effect))
@@ -1178,14 +1130,9 @@
  	    (remainderu32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (remainders64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (remainderu64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (remainderbx no-alloc side-effect-free no-cfa-top nesting (effect))
  	    (fixnum->string side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (integer->string side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (string->integer side-effect-free no-cfa-top nesting (effect))
-	    (bignum->string side-effect-free no-cfa-top nesting (effect))
-	    (bignum->octet-string side-effect-free no-cfa-top nesting (effect))
-	    (string->bignum side-effect-free no-cfa-top nesting (effect))
-	    (octet-string->bignum side-effect-free no-cfa-top nesting (effect))
  	    (modulo no-alloc side-effect-free no-cfa-top nesting (effect))
  	    (modulos8 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (modulou8 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1195,7 +1142,6 @@
  	    (modulou32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (modulos64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (modulou64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (modulobx no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (quotientfx no-alloc side-effect-free no-cfa-top nesting (effect))
  	    (quotients8 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (quotientu8 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1205,7 +1151,6 @@
  	    (quotientu32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (quotients64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (quotientu64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (quotientbx no-alloc side-effect-free no-cfa-top nesting (effect))
  	    (gcdfx no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (gcdelong no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (gcdllong no-alloc side-effect-free no-cfa-top nesting (effect))
@@ -1217,7 +1162,6 @@
  	    (gcdu32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (gcds64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (gcdu64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (gcdbx side-effect-free no-cfa-top nesting (effect))
  	    (lcmfx side-effect-free no-cfa-top nesting (effect))
 	    (lcmelong no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (lcmllong no-alloc side-effect-free no-cfa-top nesting (effect))
@@ -1229,13 +1173,11 @@
  	    (lcmu32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (lcms64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (lcmu64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (lcmbx no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (exptfx no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (expts32 no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (exptu32 no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (expts64 no-alloc side-effect-free no-cfa-top nesting (effect))
 	    (exptu64 no-alloc side-effect-free no-cfa-top nesting (effect))
-	    (exptbx side-effect-free no-cfa-top nesting (effect))
  	    (positivefx? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (positiveelong? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (positivellong? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1247,7 +1189,6 @@
  	    (positiveu32? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (positives64? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (positiveu64? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (positivebx? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (negativefx? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (negativeelong? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (negativellong? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1259,7 +1200,6 @@
  	    (negativeu32? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (negatives64? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (negativeu64? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (negativebx? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (zerofx? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (zeroelong? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (zerollong? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1271,7 +1211,6 @@
  	    (zerou32? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (zeros64? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (zerou64? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (zerobx? no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (negfx no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (negelong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
 	    (negllong no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1283,7 +1222,6 @@
  	    (negu32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (negs64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (negu64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
-	    (negbx side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (abss8 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (absu8 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (abss16 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
@@ -1292,7 +1230,6 @@
  	    (absu32 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (abss64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    (absu64 no-alloc side-effect-free no-cfa-top nesting (effect) fail-safe)
- 	    (absbx side-effect-free no-cfa-top nesting (effect) fail-safe)
  	    ($=fx no-alloc side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
 	    ($=elong no-alloc side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
 	    ($=llong no-alloc side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
@@ -1387,8 +1324,7 @@
  	    ($negfx no-alloc side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
 	    ($negelong no-alloc side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
 	    ($negllong no-alloc side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
-	    (random side-effect-free no-cfa-top nesting (effect))
-	    (randombx side-effect-free no-cfa-top nesting (effect)))
+	    (random side-effect-free no-cfa-top nesting (effect)))
 
    (cond-expand
       (bigloo-c
@@ -1400,14 +1336,6 @@
 	    ($gtfx no-alloc side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
 	    ($gefx no-alloc side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)
 	    ($egfx no-alloc side-effect-free no-cfa-top nesting args-safe (effect) fail-safe)))))
-
-;*---------------------------------------------------------------------*/
-;*    preallocated constants                                           */
-;*---------------------------------------------------------------------*/
-(define Z0 #z0)
-(define Z1 #z1)
-(define Z2 #z2)
-(define Z256 #z256)
 
 ;*---------------------------------------------------------------------*/
 ;*    integer? ...                                                     */
@@ -1446,8 +1374,6 @@
 
 (define-inline (int64? obj) ($int64? obj))
 (define-inline (uint64? obj) ($uint64? obj))
-
-(define-inline (bignum? obj) ($bignum? obj))
 
 ;*---------------------------------------------------------------------*/
 ;*    constructors and casts                                           */
@@ -1491,15 +1417,6 @@
 
 (define-inline (uint64->int64 n) ($uint64->int64 n))
 (define-inline (int64->uint64 n) ($int64->uint64 n))
-
-(define-inline (fixnum->bignum x) ($fixnum->bignum x))
-(define-inline (bignum->fixnum x) ($bignum->fixnum x))
-
-(define-inline (bignum->elong x) ($bignum->elong x))
-(define-inline (bignum->llong x) ($bignum->llong x))
-
-(define-inline (elong->bignum x) ($elong->bignum x))
-(define-inline (llong->bignum x) ($llong->bignum x))
 
 ;*---------------------------------------------------------------------*/
 ;*    fixnum->stding ...                                               */
@@ -1569,8 +1486,6 @@
 (define-inline (=s64 n1 n2) ($=s64 n1 n2))
 (define-inline (=u64 n1 n2) ($=u64 n1 n2))
 
-(define-inline (=bx n1 n2) (=fx ($bignum-cmp n1 n2) 0))
-
 ;*---------------------------------------------------------------------*/
 ;*    < ...                                                            */
 ;*---------------------------------------------------------------------*/
@@ -1590,8 +1505,6 @@
 
 (define-inline (<s64 n1 n2) ($<s64 n1 n2))
 (define-inline (<u64 n1 n2) ($<u64 n1 n2))
-
-(define-inline (<bx n1 n2) (<fx ($bignum-cmp n1 n2) 0))
 
 ;*---------------------------------------------------------------------*/
 ;*    > ...                                                            */
@@ -1613,8 +1526,6 @@
 (define-inline (>s64 n1 n2) ($>s64 n1 n2))
 (define-inline (>u64 n1 n2) ($>u64 n1 n2))
 
-(define-inline (>bx n1 n2) (>fx ($bignum-cmp n1 n2) 0))
-
 ;*---------------------------------------------------------------------*/
 ;*    <= ...                                                           */
 ;*---------------------------------------------------------------------*/
@@ -1634,8 +1545,6 @@
 
 (define-inline (<=s64 n1 n2) ($<=s64 n1 n2))
 (define-inline (<=u64 n1 n2) ($<=u64 n1 n2))
-
-(define-inline (<=bx n1 n2) (<=fx ($bignum-cmp n1 n2) 0))
 
 ;*---------------------------------------------------------------------*/
 ;*    >= ...                                                           */
@@ -1657,8 +1566,6 @@
 (define-inline (>=s64 n1 n2) ($>=s64 n1 n2))
 (define-inline (>=u64 n1 n2) ($>=u64 n1 n2))
 
-(define-inline (>=bx n1 n2) (>=fx ($bignum-cmp n1 n2) 0))
-
 ;*---------------------------------------------------------------------*/
 ;*    zero? ...                                                        */
 ;*---------------------------------------------------------------------*/
@@ -1678,8 +1585,6 @@
 
 (define-inline (zeros64? n1) (=s64 n1 (fixnum->int64 0)))
 (define-inline (zerou64? n1) (=u64 n1 (fixnum->uint64 0)))
-
-(define-inline (zerobx? n) ($zerobx? n))
 
 ;*---------------------------------------------------------------------*/
 ;*    positive? ...                                                    */
@@ -1701,8 +1606,6 @@
 (define-inline (positives64? n1) (>s64 n1 (fixnum->int64 0)))
 (define-inline (positiveu64? n1) (>u64 n1 (fixnum->uint64 0)))
 
-(define-inline (positivebx? n) ($positivebx? n))
-
 ;*---------------------------------------------------------------------*/
 ;*    negative? ...                                                    */
 ;*---------------------------------------------------------------------*/
@@ -1722,8 +1625,6 @@
 
 (define-inline (negatives64? n1) (<s64 n1 (fixnum->int64 0)))
 (define-inline (negativeu64? n1) (<u64 n1 (fixnum->uint64 0)))
-
-(define-inline (negativebx? n) ($negativebx? n))
 
 ;*---------------------------------------------------------------------*/
 ;*    odd? ...                                                         */
@@ -1763,9 +1664,6 @@
 (define-inline (oddu64? n)
    (=u64 (remainderu64 n (fixnum->uint64 2)) (fixnum->uint64 1)))
 
-(define-inline (oddbx? x)
-   ($oddbx? x))
-
 ;*---------------------------------------------------------------------*/
 ;*    even? ...                                                        */
 ;*---------------------------------------------------------------------*/
@@ -1794,8 +1692,6 @@
 
 (define-inline (evens64? n1) (not (odds64? n1)))
 (define-inline (evenu64? n1) (not (oddu64? n1)))
-
-(define-inline (evenbx? x) ($evenbx? x))
 
 ;*---------------------------------------------------------------------*/
 ;*    min/max ...                                                      */
@@ -1826,8 +1722,6 @@
 (define (mins64 n1 . nn) (min/max <s64 n1 . nn))
 (define (minu64 n1 . nn) (min/max <u64 n1 . nn))
    
-(define (minbx n1 . nn) (min/max <bx n1 . nn))
-
 ;*---------------------------------------------------------------------*/
 ;*    maxfx ...                                                        */
 ;*---------------------------------------------------------------------*/
@@ -1849,8 +1743,6 @@
 (define (maxs64 n1 . nn) (min/max >s64 n1 . nn))
 (define (maxu64 n1 . nn) (min/max >u64 n1 . nn))
    
-(define (maxbx n1 . nn) (min/max >bx n1 . nn))
-
 ;*---------------------------------------------------------------------*/
 ;*    + ...                                                            */
 ;*---------------------------------------------------------------------*/
@@ -1870,8 +1762,6 @@
 
 (define-inline (+s64 z1 z2) ($+s64 z1 z2))
 (define-inline (+u64 z1 z2) ($+u64 z1 z2))
-
-(define-inline (+bx z1 z2) ($+bx z1 z2))
 
 (define-inline (+fx/ov z1 z2)
    (cond-expand
@@ -1903,8 +1793,6 @@
 (define-inline (-s64 z1 z2) ($-s64 z1 z2))
 (define-inline (-u64 z1 z2) ($-u64 z1 z2))
 
-(define-inline (-bx z1 z2) ($-bx z1 z2))
-
 (define-inline (-fx/ov z1 z2)
    (cond-expand
       (bigloo-c
@@ -1934,8 +1822,6 @@
 
 (define-inline (*s64 z1 z2) ($*s64 z1 z2))
 (define-inline (*u64 z1 z2) ($*u64 z1 z2))
-
-(define-inline (*bx z1 z2) ($*bx z1 z2))
 
 (define-inline (*fx/ov z1 z2)
    (cond-expand
@@ -1967,7 +1853,13 @@
 (define-inline (/s64 z1 z2) ($/s64 z1 z2))
 (define-inline (/u64 z1 z2) ($/u64 z1 z2))
 
-(define-inline (/bx z1 z2) ($quotientbx z1 z2))
+(define-inline (/fx/ov z1 z2)
+   (if (=fx z2 0)
+       (cond
+	  ((>fx z1 0) +inf.0)
+	  ((<fx z1 0) -inf.0)
+	  (else +nan.0))
+       (/fx z1 z2)))
 
 ;*---------------------------------------------------------------------*/
 ;*    neg ...                                                          */
@@ -1989,8 +1881,6 @@
 (define-inline (negs64 z) (-s64 (fixnum->int64 0) z))
 (define-inline (negu64 z) (-u64 (fixnum->uint64 0) z))
 
-(define-inline (negbx n1) ($negbx n1))
-
 ;*---------------------------------------------------------------------*/
 ;*    abs ...                                                          */
 ;*---------------------------------------------------------------------*/
@@ -2010,8 +1900,6 @@
 
 (define-inline (abss64 z) (if (<s64 z (fixnum->int64 0)) (negs64 z) z))
 (define-inline (absu64 z) z)
-
-(define-inline (absbx n) ($absbx n))
 
 ;*---------------------------------------------------------------------*/
 ;*    int2op ...                                                       */
@@ -2095,8 +1983,6 @@
 (define-inline (quotients64 n1 n2) ($quotients64 n1 n2))
 (define-inline (quotientu64 n1 n2) ($quotientu64 n1 n2))
 
-(define-inline (quotientbx n1 n2) ($quotientbx n1 n2))
-
 ;*---------------------------------------------------------------------*/
 ;*    remainder ...                                                    */
 ;*---------------------------------------------------------------------*/
@@ -2132,8 +2018,6 @@
 
 (define-inline (remainders64 n1 n2) ($remainders64 n1 n2))
 (define-inline (remainderu64 n1 n2) ($remainderu64 n1 n2))
-
-(define-inline (remainderbx n1 n2) ($remainderbx n1 n2))
 
 ;*---------------------------------------------------------------------*/
 ;*    modulo ...                                                       */
@@ -2225,14 +2109,6 @@
 	    (if (positiveu64? r) r (+u64 y r))
 	    (if (negativeu64? r) r (+u64 y r))))))
 
-(define (modulobx x y)
-   (let ((r (remainderbx x y)))
-      (if (zerobx? r)
-	  r
-	  (if (positivebx? y)
-	      (if (positivebx? r) r (+bx y r))
-	      (if (negativebx? r) r (+bx y r))))))
-
 ;*---------------------------------------------------------------------*/
 ;*    gcdop ...                                                        */
 ;*---------------------------------------------------------------------*/
@@ -2275,16 +2151,6 @@
 
 (define (gcds64 . x) (gcdop s64 x (fixnum->int64 0)))
 (define (gcdu64 . x) (gcdop u64 x (fixnum->uint64 0)))
-
-(define (gcdbx . x)
-  (cond ((null? x) (fixnum->bignum 0))
-	((null? (cdr x)) (absbx (car x)))
-	(else
-	 (let loop ((tmp ($gcdbx (absbx (car x)) (absbx (cadr x))))
-		    (left (cddr x)))
-	   (if (pair? left)
-	       (loop ($gcdbx tmp (absbx (car left))) (cdr left))
-	       tmp)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    lcmop ...                                                        */
@@ -2331,16 +2197,6 @@
 (define (lcms64 . x) (lcmop s64 x (fixnum->int64 0) (fixnum->int64 1)))
 (define (lcmu64 . x) (lcmop u64 x (fixnum->uint64 0) (fixnum->uint64 1)))
 
-(define (lcmbx . x)
-  (cond ((null? x) (fixnum->bignum 1))
-	((null? (cdr x)) (absbx (car x)))
-	(else
-	 (let loop ((tmp ($lcmbx (car x) (cadr x)))
-		    (left (cddr x)))
-	   (if (pair? left)
-	       (loop ($lcmbx tmp (car left)) (cdr left))
-	       tmp)))))
-
 ;*---------------------------------------------------------------------*/
 ;*    exptfx ...                                                       */
 ;*---------------------------------------------------------------------*/
@@ -2349,6 +2205,19 @@
       ((zerofx? y) 1)
       ((evenfx? y) (exptfx (*fx x x) (quotientfx y 2)))
       (else (*fx x (exptfx x (-fx y 1))))))
+
+;*---------------------------------------------------------------------*/
+;*    exptfx/ov ...                                                    */
+;*---------------------------------------------------------------------*/
+(define (exptfx/ov x y)
+   (let loop ((x x)
+	      (y y))
+      (cond
+	 ((bignum? x) (exptbx x (fixnum->bignum y)))
+	 ((zerofx? y) 1)
+	 ((evenfx? y) (loop (*fx/ov x x) (quotientfx y 2)))
+	 (else (let ((n (loop x (-fx y 1))))
+		  (if (bignum? n) (*bx (fixnum->bignum x) n) (*fx x n)))))))
 
 ;*---------------------------------------------------------------------*/
 ;*    expts32 ...                                                      */
@@ -2387,26 +2256,11 @@
       (else (*u64 x (exptu64 x (-u64 y #u64:1))))))
 
 ;*---------------------------------------------------------------------*/
-;*    exptbx ...                                                       */
-;*---------------------------------------------------------------------*/
-(define-inline (exptbx x y)
-   (cond-expand
-      (bigloo-c
-       ($exptbx x y))
-      (else
-       (cond
-	  ((zerobx? y) #z1)
-	  ((evenbx? y) (exptbx (*bx x x) (quotientbx y #z2)))
-	  (else (*bx x (exptbx x (-bx y #z1))))))))
-
-;*---------------------------------------------------------------------*/
 ;*    integer->string-op ...                                           */
 ;*---------------------------------------------------------------------*/
 (define-macro (integer->string-op op x radix)
    (let* ((op->string (symbol-append op '->string))
-	  ($op->string (if (eq? op 'bignum)
-			    '$bignum->string
-			    (symbol-append '$ op->string)))
+	  ($op->string (symbol-append '$ op->string))
 	  (radixv (gensym 'radix)))
       `(let ((,radixv ,radix))
 	  (cond
@@ -2478,73 +2332,6 @@
   (integer->string-op llong x (if (null? radix) 10 (car radix))))
 
 ;*---------------------------------------------------------------------*/
-;*    bignum->string ...                                               */
-;*---------------------------------------------------------------------*/
-(define (bignum->string x #!optional (radix::long 10))
-  (integer->string-op bignum x radix))
-
-;*---------------------------------------------------------------------*/
-;*    bignum->octet-string ...                                         */
-;*---------------------------------------------------------------------*/
-(define (bignum->octet-string x)
-   (define (/ceilingfx x y)
-      (let ((q (quotientfx x y))
-	    (r (remainderfx x y)))
-	 (cond
-	    ((zerofx? r) q)
-	    ((>fx r 0)   (+fx q 1))
-	    (else        (-fx q 1)))))
-
-   (define (bignum-bit-length::long b::bignum)
-      (let loop ((b b)
-		 (res 0))
-	 (let ((divided (/bx b Z256)))
-	    (cond
-	       ((zerobx? b) res)
-	       ((zerobx? divided) ;; this is the last octet
-		(let ((x (bignum->fixnum b)))
-		   (cond
-		      ((<fx x #x02) (+fx res 1))
-		      ((<fx x #x04) (+fx res 2))
-		      ((<fx x #x08) (+fx res 3))
-		      ((<fx x #x10) (+fx res 4))
-		      ((<fx x #x20) (+fx res 5))
-		      ((<fx x #x40) (+fx res 6))
-		      ((<fx x #x80) (+fx res 7))
-		      (else (+fx res 8)))))
-	       (else
-		(loop divided (+fx res 8)))))))
-
-   (define (last-char-digit::char x::bignum)
-      (integer->char-ur (bignum->fixnum (remainderbx x Z256))))
-
-   (let* ((len (/ceilingfx (bignum-bit-length x) 8))
-	  (buffer (make-string len)))
-      (let loop ((x x)
-		 (i (-fx len 1)))
-	 (cond
-	    ((and (<fx i 0)
-		  (zerobx? x))
-	     buffer)
-	    ((<fx i 0)
-	     (error "bignum->bin-str!" "integer too large" x))
-	    (else
-	     (string-set! buffer i (last-char-digit x))
-	     (loop (/bx x Z256) (-fx i 1)))))))
-
-;*---------------------------------------------------------------------*/
-;*    octet-string->bignum ...                                         */
-;*---------------------------------------------------------------------*/
-(define (octet-string->bignum str)
-   (let loop ((i 0)
-	      (res Z0))
-      (if (=fx i (string-length str))
-	  res
-	  (loop (+fx i 1)
-		(+bx (*bx res Z256)
-		     (fixnum->bignum (char->integer (string-ref str i))))))))
-
-;*---------------------------------------------------------------------*/
 ;*    string->integer ...                                              */
 ;*    -------------------------------------------------------------    */
 ;*    Not inlined because it is overriden by a macro.                  */
@@ -2573,14 +2360,6 @@
        (error "string->llong" "Illegal radix" radix)))
 
 ;*---------------------------------------------------------------------*/
-;*    string->bignum ...                                               */
-;*---------------------------------------------------------------------*/
-(define (string->bignum string #!optional (radix::long 10))
-  (if (and (>=fx radix 2) (<=fx radix 36))
-      ($string->bignum string radix)
-      (error "string->bignum" "Illegal radix" radix)))
-
-;*---------------------------------------------------------------------*/
 ;*    string->integer_obj ...                                          */
 ;*---------------------------------------------------------------------*/
 (define (string->integer-obj string radix)
@@ -2591,12 +2370,6 @@
 ;*---------------------------------------------------------------------*/
 (define-inline (random max::long)
    (if (=fx max 0) 0 (modulofx ($rand) max)))
-
-;*---------------------------------------------------------------------*/
-;*    randombx ...                                                     */
-;*---------------------------------------------------------------------*/
-(define-inline (randombx max::bignum)
-   (if (=fx (bignum->fixnum max) 0) #z0 ($randbx max)))
 
 ;*---------------------------------------------------------------------*/
 ;*    seed-random! ...                                                 */

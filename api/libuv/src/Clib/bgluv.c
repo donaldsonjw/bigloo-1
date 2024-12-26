@@ -3,8 +3,8 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Tue May  6 13:53:14 2014                          */
-/*    Last change :  Fri Dec  8 19:23:22 2023 (serrano)                */
-/*    Copyright   :  2014-23 Manuel Serrano                            */
+/*    Last change :  Wed Feb 14 12:48:22 2024 (serrano)                */
+/*    Copyright   :  2014-24 Manuel Serrano                            */
 /*    -------------------------------------------------------------    */
 /*    LIBUV Bigloo C binding                                           */
 /*=====================================================================*/
@@ -2090,7 +2090,7 @@ bgl_uv_fs_write(obj_t obj, obj_t buffer, long offset, long length, int64_t posit
 	 data->proc = proc;
 
 	 TRACECA(trw);
-	 uv_fs_write(loop, req, fd, &iov, 1, position, &bgl_uv_fs_rw_cb);
+	 return uv_fs_write(loop, req, fd, &iov, 1, position, &bgl_uv_fs_rw_cb);
       } else {
 	 uv_fs_t req;
 	 int r;
@@ -2130,7 +2130,7 @@ bgl_uv_fs_write2(obj_t obj, obj_t buffer, long offset, long length, int64_t posi
 	 data->arg[1] = arg1;
 
 	 TRACECA(trw2);
-	 uv_fs_write(loop, req, fd, &iov, 1, position, &bgl_uv_fs_rw2_cb);
+	 return uv_fs_write(loop, req, fd, &iov, 1, position, &bgl_uv_fs_rw2_cb);
       } else {
 	 uv_fs_t req;
 	 int r;
@@ -2171,7 +2171,7 @@ bgl_uv_fs_write3(obj_t obj, obj_t buffer, long offset, long length, int64_t posi
 	 data->arg[2] = arg2;
 
 	 TRACECA(trw3);
-	 uv_fs_write(loop, req, fd, &iov, 1, position, &bgl_uv_fs_rw3_cb);
+	 return uv_fs_write(loop, req, fd, &iov, 1, position, &bgl_uv_fs_rw3_cb);
       } else {
 	 uv_fs_t req;
 	 int r;
@@ -2978,7 +2978,7 @@ uv_listen_cb(uv_stream_t *handle, int status) {
 /*    bgl_uv_listen ...                                                */
 /*---------------------------------------------------------------------*/
 int
-bgl_uv_listen(obj_t obj, int backlog, obj_t proc, bgl_uv_loop_t bloop) {
+bgl_uv_listen(obj_t obj, int backlog, obj_t proc) {
    if (!(PROCEDUREP(proc) && (PROCEDURE_CORRECT_ARITYP(proc, 2)))) {
       C_SYSTEM_FAILURE(BGL_TYPE_ERROR, "uv-tcp-listen",
 			"wrong callback", proc);
@@ -2993,10 +2993,10 @@ bgl_uv_listen(obj_t obj, int backlog, obj_t proc, bgl_uv_loop_t bloop) {
       r = uv_listen(s, backlog, uv_listen_cb);
 
       if (r < 0) {
-	 fprintf(stderr, "LISTEN ERROR...\n");
 	 TRACECNT(klisten);
 	 free_stream_data(data);
       }
+      return r;
    }
 }
 

@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue Jul 11 10:05:41 2017                          */
-;*    Last change :  Wed Dec 13 08:32:59 2023 (serrano)                */
-;*    Copyright   :  2017-23 Manuel Serrano                            */
+;*    Last change :  Thu Jun 27 15:08:04 2024 (serrano)                */
+;*    Copyright   :  2017-24 Manuel Serrano                            */
 ;*    -------------------------------------------------------------    */
 ;*    Basic Blocks Versioning experiment.                              */
 ;*=====================================================================*/
@@ -38,7 +38,8 @@
 	    saw_bbv-merge
 	    saw_bbv-liveness
 	    saw_bbv-optim
-	    saw_bbv-debug)
+	    saw_bbv-debug
+	    saw_bbv-profile)
 
    (export  (bbv::pair-nil ::backend ::global ::pair-nil ::pair-nil)))
 
@@ -51,10 +52,14 @@
 		(memq (global-id global) *saw-bbv-functions*))
 	    (>=fx *max-block-merge-versions* 1))
        (with-trace 'bbv (global-id global)
-	  (when *bbv-debug* (tprint "=== " (shape global)))
 	  (start-bbv-cache!)
-	  (verbose 2 "        bbv " (global-id global))
-	  (when (>=fx *trace-level* 2)
+	  (verbose 2 "        bbv " (global-id global)
+	     " (" *max-block-merge-versions*
+	     (if *bbv-optim-vlength* " vlen" "")
+	     (if *bbv-optim-alias* " alias" "")
+	     (if *bbv-blocks-cleanup* " cleanup" "")
+	     ")")
+	  (when *bbv-dump-cfg*
 	     (dump-cfg global params blocks ".plain.cfg"))
 	  (set-max-label! blocks)
 	  ;; After the reorder-succs! pass, the succs list order is meaningful.
@@ -62,59 +67,63 @@
 	  ;; (sometimes implicit). If any second successor, it is the target
 	  ;; of the conditional branch of the instruction.
 	  (reorder-succs! blocks)
-	  (when (>=fx *trace-level* 2)
+	  (when *bbv-dump-cfg*
 	     (dump-cfg global params blocks ".reorder.cfg"))
 	  ;; replace the possible go instruction that follows an error call
 	  (fail! (car blocks))
-	  (when (>=fx *trace-level* 2)
+	  (when *bbv-dump-cfg*
 	     (dump-cfg global params blocks ".failure.cfg"))
 	  ;; there are several form of type checks, normalize them to ease
 	  ;; the bbv algorithm
 	  (normalize-typecheck! (car blocks))
-	  (when (>=fx *trace-level* 2)
+	  (when *bbv-dump-cfg*
 	     (dump-cfg global params blocks ".typecheck.cfg"))
 	  (let ((blocks (normalize-goto! (remove-temps! (car blocks)))))
-	     (when (>=fx *trace-level* 2)
+	     (when *bbv-dump-cfg*
 		(dump-cfg global params blocks ".goto.cfg"))
 	     (let ((blocks (normalize-ifeq! (car blocks))))
-		(when (>=fx *trace-level* 2)
+		(when *bbv-dump-cfg*
 		   (dump-cfg global params blocks ".ifeq.cfg"))
 		(let ((blocks (normalize-mov! (car blocks))))
-		   (when (>=fx *trace-level* 2)
+		   (when *bbv-dump-cfg*
 		      (dump-cfg global params blocks ".mov.cfg"))
 		   (let ((regs (bbv-liveness! back blocks params)))
 		      ;; liveness also widen each block into a blockV
 		      (mark-merge! (car blocks))
-		      (when (>=fx *trace-level* 2)
+		      (when *bbv-dump-cfg*
 			 (dump-cfg global params blocks ".liveness.cfg"))
 		      (unwind-protect
 			 (if (null? blocks)
 			     '()
-			     (let* ((s (bbv-block* (car blocks)
-					  (params->ctx params)))
-				    (_ (when (>=fx *trace-level* 2)
-					  (dump-cfg global params
-					     (block->block-list regs s)
-					     ".specialize.cfg")))
-				    (__ (when *bbv-log*
+			     (let* ((s (dump-blocks 1 "specialize" global params regs #f
+					  (bbv-root-block (car blocks)
+					     (params->ctx params))))
+				    (__a (when *bbv-log*
 					   (log-blocks global params blocks)))
+				    (history (when *bbv-dump-json*
+						(log-blocks-history global params blocks)))
+				    (pr (dump-blocks 1 "profile" global params regs history
+					   (profile! s)))
+				    (as (dump-blocks 1 "assert" global params regs history
+					   (assert-context! pr)))
 				    (b (block->block-list regs
-					  (assert-context!
-					     (if *bbv-blocks-cleanup*
-						 (simplify-branch!
-						    (remove-nop!
-						       (remove-goto!
-							  (simplify-branch!
-							     (coalesce!
-								(get-bb-mark)
-								(gc! s))))))
-						 s)))))
+					  (if *bbv-blocks-cleanup*
+					      (dump-blocks 1 "simplify2" global params regs history
+						 (simplify-branch! global
+						    (dump-blocks 1 "nop" global params regs history
+						       (remove-nop! global
+							  (dump-blocks 1 "goto" global params regs history
+							     (remove-goto! global
+								(dump-blocks 1 "simplify1" global params regs history
+								   (simplify-branch! global
+								      (dump-blocks 1 "coalesce" global params regs history
+									 (coalesce! global
+									    (gc! as)))))))))))
+					      as))))
 				(verbose 3 " "
 				   (length blocks) " -> " (length b))
 				(verbose 2 "\n")
-				(when (>=fx *trace-level* 1)
-				   (dump-cfg global params
-				      (block->block-list regs s) ".bbv.cfg"))
+				(dump-blocks 1 "bbv" global params regs history s)
 				(map! (lambda (b) (shrink! b)) b)
 				b))
 			 ;; don't shrink, otherwise dump could no longer
@@ -123,6 +132,18 @@
 				     (>=fx *trace-level* 1))
 			    (for-each (lambda (r) (shrink! r)) regs))))))))
        blocks))
+
+;*---------------------------------------------------------------------*/
+;*    dump-blocks ...                                                  */
+;*---------------------------------------------------------------------*/
+(define (dump-blocks::blockS level::long name global::global params::pair-nil regs::pair-nil history b::blockS)
+   (when (and *bbv-dump-cfg* (or (>=fx *trace-level* level) (=fx level 1)))
+      (dump-cfg global params
+	 (block->block-list regs b) (format ".~a.cfg" name)))
+   (when (and *bbv-dump-json* (or (>=fx *trace-level* level) (=fx level 1)))
+      (dump-json-cfg global params history
+         (block->block-list regs b) (format ".~a.json" name)))
+   b)
 
 ;*---------------------------------------------------------------------*/
 ;*    mark-merge! ...                                                  */
@@ -206,8 +227,12 @@
 		      (filter (lambda (b) (bbset-in? b setm)) versions)))
 		(loop (append succs (cdr bs))
 		   (cons (car bs) set)))))))
-   
-   (collect! b (mark b))
+
+   (when (or (eq? *bbv-blocks-cleanup* #t)
+	     (and (string? *bbv-blocks-cleanup*)
+		  (or (string-contains *bbv-blocks-cleanup* "coalesce")
+		      (string-contains *bbv-blocks-cleanup* "gc"))))
+      (collect! b (mark b)))
    b)
 
 ;*---------------------------------------------------------------------*/
@@ -342,14 +367,13 @@
 	       (let ((fail (instantiate::rtl_ins
 			      (dest #f)
 			      (fun (instantiate::rtl_pragma
+				      (srfi0 'bigloo-c)
 				      (loc (rtl_ins-loc last))
 				      (format "exit(0)")))
 			      (args '()))))
 		  (when (null? (cdr succs))
 		     (set! succs '()))
-		  (if (rtl_ins-go? last)
-		      (set-car! lp fail)
-		      (set-cdr! lp (list fail))))))))
+		  (set-cdr! first (list fail)))))))
 
    (let loop ((bs (list b))
 	      (acc '()))

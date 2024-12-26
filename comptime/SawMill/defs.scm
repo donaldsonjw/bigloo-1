@@ -61,7 +61,7 @@
       (class rtl_apply::rtl_fun)
       (class rtl_lightfuncall::rtl_fun name::symbol funs::pair-nil rettype)
       (class rtl_funcall::rtl_fun)
-      (class rtl_pragma::rtl_fun format::bstring)
+      (class rtl_pragma::rtl_fun format::bstring srfi0::symbol)
       (class rtl_cast::rtl_fun totype::type fromtype::type)
       (class rtl_cast_null::rtl_fun type::type)
       (class rtl_protect::rtl_fun)
@@ -99,7 +99,10 @@
 (define debug-saw
    (let ((e (getenv "BIGLOOTRACE")))
       (when (string? e)
-	 (string-index "bbv" e))))
+	 (or (string-prefix? "bbv " e)
+	     (string-suffix? " bbv" e)
+	     (string-contains e " bbv ")
+	     (string=? "bbv" e)))))
 
 ;*---------------------------------------------------------------------*/
 ;*    rtl_ins-args* ...                                                */
@@ -324,7 +327,7 @@
 (define-method (dump-fun o::rtl_loadi dest args p m)
    (show-fun o dest p)
    (display " " p)
-   (display (atom-value (rtl_loadi-constant o)) p)
+   (write (atom-value (rtl_loadi-constant o)) p)
    (dump-args args p))
 
 ;*---------------------------------------------------------------------*/
@@ -433,4 +436,25 @@
    (display " " p)
    (dump-args args p))
    
+;*---------------------------------------------------------------------*/
+;*    dump-fun ::rtl_cast ...                                          */
+;*---------------------------------------------------------------------*/
+(define-method (dump-fun o::rtl_cast dest args p m)
+   (show-fun o dest p)
+   (display " " p)
+   (display (shape (rtl_cast-totype o)) p)
+   (display "<-" p)
+   (display (shape (rtl_cast-fromtype o)) p)
+   (dump-args args p))
+
+;*---------------------------------------------------------------------*/
+;*    dump-fun ::rtl_new ...                                           */
+;*---------------------------------------------------------------------*/
+(define-method (dump-fun o::rtl_new dest args p m)
+   (show-fun o dest p)
+   (display "::" p)
+   (display (shape (rtl_new-type o)) p)
+   (display " " p)
+   (display (map shape (rtl_new-constr o)) p)
+   (dump-args args p))
 

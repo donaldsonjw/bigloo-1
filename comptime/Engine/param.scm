@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue Oct  3 12:44:17 1995                          */
-;*    Last change :  Tue Jul 11 15:12:01 2023 (serrano)                */
-;*    Copyright   :  1995-2023 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Fri Dec 13 05:37:52 2024 (serrano)                */
+;*    Copyright   :  1995-2024 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    Global control of the compiler                                   */
 ;*=====================================================================*/
@@ -81,6 +81,7 @@
 	    *optim-dataflow?*
 	    *optim-dataflow-for-errors?*
 	    *optim-dataflow-types?*
+	    *optim-peephole?*
 	    *optim-initflow?*
 	    *optim-sync-failsafe?*
 	    *optim-reduce-beta?*
@@ -93,9 +94,11 @@
 	    *optim-return?*
 	    *optim-return-goto?*
 	    *optim-tagged-fxop?*
+	    *optim-prebox?*
 	    *optim-specialize-flonum?*
 	    *optim-stackable?*
 	    *optim-uncell?*
+	    *optim-unsafe-cell?*
 	    *purify*
 	    *jvm-env*
 	    *arithmetic-genericity*
@@ -211,6 +214,7 @@
 	    *heap-name*
 	    *heap-library*
 	    *heap-jvm-name*
+	    *heap-wasm-name*
 	    *heap-dump-names*
 	    *jvm-foreign-class-id*
 	    *jvm-foreign-class-name*
@@ -569,6 +573,10 @@
 (param-define *heap-jvm-name*
    "The Bigloo heap file name for the JVM backend"
    (string-append *heap-base-name* ".jheap"))
+;; the wasm heap name
+(param-define *heap-wasm-name*
+   "The Bigloo heap file name for the WASM backend"
+   (string-append *heap-base-name* ".wheap"))
 ;; the heap dumped names
 (param-define *heap-dump-names*
    "The name of the heap to be dumped"
@@ -944,6 +952,9 @@
 (param-define *optim-dataflow-types?*
    "Enable dataflow optimization for types"
    #f)
+(param-define *optim-peephole?*
+   "Enable peephole optimization for global variables"
+   #f)
 (param-define *optim-initflow?*
    "Enable initflow optimization for global variables"
    #f)
@@ -974,6 +985,9 @@
 (param-define *optim-tagged-fxop?*
    "Optimize tagged fixnum operations"
    #f)
+(param-define *optim-prebox?*
+   "Optimize box/unbox operations"
+   #f)
 (param-define *optim-specialize-flonum?*
    "Optimize specialize flonum operations"
    #f)
@@ -982,6 +996,9 @@
    #f)
 (param-define *optim-uncell?*
    "Remove useless cells"
+   #f)
+(param-define *optim-unsafe-cell?*
+   "Use unsafe cell for shared captured variables"
    #f)
 
 ;*---------------------------------------------------------------------*/

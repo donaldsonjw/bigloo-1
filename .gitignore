@@ -88,8 +88,8 @@ comptime/Tools/date.scm
 comptime/Tools/license.scm
 
 # runtime
-runtime/Unsafe/regexp.scm
 runtime/Jlib/configure.java
+runtime/Llib/bconfigure-generic.sch
 
 # recette
 recette/objs_c
@@ -224,6 +224,7 @@ libuv/libuv-v1.40.0/
 libuv/libuv-v1.43.0/
 libuv/libuv-v1.44.2/
 libuv/libuv-v1.47.0/
+libuv/libuv-v1.48.0/
 
 # xlib
 xlib/include/

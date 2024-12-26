@@ -262,7 +262,17 @@ public final class foreign
 		  && (((bint) o1).value == ((bint) o2).value)));
       }
 
+   public static boolean EQBOOL(boolean o1, boolean o2)
+      {
+	 return (o1 == o2);
+      }
+
    public static boolean BOXED_EQ(Object o1, Object o2)
+      {
+	 return (o1 == o2);
+      }
+
+   public static boolean EQB(boolean o1, boolean o2)
       {
 	 return (o1 == o2);
       }
@@ -861,6 +871,9 @@ public final class foreign
 	 return n.value.doubleValue();
       }
 
+   public static bint BINT_NULL = bint_allocated[100];
+   public static int LONG_NULL = 0;
+   
    public static bint BINT(long v)
       {
 	 if ((-100 <= v) && (v < 2018))
@@ -3403,6 +3416,22 @@ public final class foreign
       }
 
    // Open functions
+   public static cell BGL_MAKE_UNSAFE_CELL(Object o)
+      {
+	 return new cell(o);
+      }
+
+   public static Object BGL_UNSAFE_CELL_SET(cell o, Object v)
+      {
+	 o.car = v;
+	 return unspecified.unspecified;
+      }
+
+   public static Object BGL_UNSAFE_CELL_REF(cell o)
+      {
+	 return o.car;
+      }
+
    public static cell MAKE_CELL(Object o)
       {
 	 return new cell(o);
@@ -3839,6 +3868,10 @@ public final class foreign
    // VECTOR
    //////
    // Predicates
+   public static Object[] BGL_AS_VECTOR(Object o) {
+      return (Object[])o;
+   }
+   
    public static boolean VECTORP(Object o) {
       return (o instanceof Object[]);
    }
@@ -4414,6 +4447,10 @@ public final class foreign
    ////
    // CLASS
    ////
+   public static Object BGL_AS_CLASS(Object o) {
+      return (bclass)o;
+   }
+   
    public static int BGL_MAX_CLASS_NUM(Object o) {
       return 1 << 32;
    }
@@ -5750,7 +5787,7 @@ public final class foreign
       res = p.funcall0();
       end = System.currentTimeMillis();
 
-      env.mvalues_number = 1;
+      env.mvalues_number = 4;
       env.mvalues_values[ 1 ] = BINT( end - start );
       env.mvalues_values[ 2 ] = BINT( 0 );
       env.mvalues_values[ 3 ] = BINT( 0 );
@@ -6335,14 +6372,14 @@ public final class foreign
 	 return new input_string_port( s, start, end, true );
       }
 
-   public static Object bgl_open_input_mmap(mmap mm, byte[] b, int start, int end)
+   public static input_port bgl_open_input_mmap(mmap mm, byte[] b, int start, int end)
       {
-	 return BFALSE;
+         return new input_mmap_port(mm, b, start, end); 
       }
     
    public static boolean INPUT_MMAP_PORTP(Object o)
       {
-	 return false;
+          return (o instanceof input_mmap_port);
       }
 
    public static Object bgl_open_input_procedure(procedure p, byte[] b)
@@ -6374,8 +6411,16 @@ public final class foreign
 	 return p;
       }
 
+   public static int bgl_input_port_timeout(input_port p) {
+      return 0;
+   }
+   
    public static boolean bgl_input_port_timeout_set(input_port p, int to) {
-      return p.timeout_set( to / 1000 );
+      return p.timeout_set(to / 1000);
+   }
+   
+   public static int bgl_output_port_timeout(output_port p) {
+      return 0;
    }
    
    public static boolean bgl_output_port_timeout_set(output_port p, int to) {
@@ -6723,7 +6768,7 @@ public final class foreign
          // Commenting out the following stack trace printing to reduce noisy and confusing
          // ouput. If debugging problems, uncomment.
 	 // final stackwriter sw = new stackwriter( System.out, true );
-	 // e.printStackTrace( sw );
+         // e.printStackTrace( sw );
 	 
 	 bigloo.runtime.Llib.error.bgl_system_failure(
 	    (e instanceof java.net.SocketTimeoutException ?

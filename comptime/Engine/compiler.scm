@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri May 31 08:22:54 1996                          */
-;*    Last change :  Thu Nov  3 11:05:14 2022 (serrano)                */
-;*    Copyright   :  1996-2022 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Fri Dec 13 05:36:36 2024 (serrano)                */
+;*    Copyright   :  1996-2024 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The compiler driver                                              */
 ;*=====================================================================*/
@@ -43,6 +43,7 @@
 	    ast_init
 	    ast_lvtype
 	    user_user
+	    peephole_walk
 	    type_env
 	    type_cache
 	    module_module
@@ -70,6 +71,7 @@
 	    tailc_walk
 	    fxop_walk
 	    flop_walk
+	    prebox_walk
 	    coerce_walk
 	    reduce_walk
 	    cnst_walk
@@ -114,7 +116,8 @@
 	 (set! *unsafe-type* #t)))
    (unless (backend-typed-funcall (the-backend))
       (set! *optim-cfa-unbox-closure-args* #f))
-   (when (>fx *compiler-debug-trace* 0)
+   (when (or (>=fx *compiler-debug-trace* 1)
+	     (>=fx *compiler-debug* 1))
       ;; compiler introduced traces are imcompatible with the setjmp/longmp
       ;; optimization
       (set! *optim-return-goto?* #f))
@@ -265,7 +268,8 @@
 	 (backend-check-inlines (the-backend))
 
 	 ;; explicit GC roots registration
-	 (when *gc-force-register-roots?*
+	 (when (and *gc-force-register-roots?*
+		    (backend-force-register-gc-roots (the-backend)))
 	    (set! units (cons (make-gc-roots-unit) units)))
 
 	 ;; ok, now we build the ast
@@ -279,6 +283,13 @@
 	    ;; Flycheck and Flymake
 	    (stop-on-pass 'syntax-check (lambda () #unspecified))
 	 
+	    ;; early peephole optimizations
+	    (when *optim-peephole?*
+	       (set! ast (profile peephole (peephole-walk! ast))))
+	    (stop-on-pass 'peephole (lambda () (write-ast ast)))
+	    (check-sharing "peephole" ast)
+	    (check-type "peephole" ast #f #f)
+
 	    ;; compute the global init property
 	    (when *optim-initflow?*
 	       (set! ast (profile initflow (initflow-walk! ast))))
@@ -355,15 +366,6 @@
 	    (stop-on-pass 'beta (lambda () (write-ast ast)))
 	    (check-sharing "beta" ast)
 	    (check-type "beta" ast #f #f)
-	    
-;* 	    ;; we introduce traces in `small debug mode'               */
-;* 	    (when (and (>=fx *compiler-debug-trace* 1)                 */
-;* 		       (=fx (bigloo-compiler-debug) 1)                 */
-;* 		       (backend-trace-support (the-backend)))          */
-;* 	       (set! ast (profile trace (trace-walk! ast))))           */
-;* 	    (stop-on-pass 'trace (lambda () (write-ast ast)))          */
-;* 	    (check-sharing "trace" ast)                                */
-;* 	    (check-type "trace" ast #f #f)                             */
 	    
 	    ;; we replace `failure' invokation by `error/location' when
 	    ;; invoked in debug mode (to be performed after the coercion stage)
@@ -455,6 +457,13 @@
 	       (stop-on-pass 'fxop (lambda () (write-ast ast)))
 	       (check-sharing "fxop" ast)
 	       (check-type "fxop" ast #t #f))
+		       
+	    ;; Preboxing (or box-unbox) optimization
+	    (when *optim-prebox?*
+	       (set! ast (profile fxop (prebox-walk! ast)))
+	       (stop-on-pass 'prebox (lambda () (write-ast ast)))
+	       (check-sharing "prebox" ast)
+	       (check-type "prebox" ast #t #f))
 		       
 	    ;; now that type checks have been introduced, we recompute
 	    ;; the type dataflow analysis

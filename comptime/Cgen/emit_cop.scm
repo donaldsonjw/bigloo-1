@@ -3,8 +3,8 @@
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Tue Jul  2 14:39:37 1996                          */
-;*    Last change :  Wed Dec 13 11:46:47 2023 (serrano)                */
-;*    Copyright   :  1996-2023 Manuel Serrano, see LICENSE file        */
+;*    Last change :  Fri Nov  8 08:09:44 2024 (serrano)                */
+;*    Copyright   :  1996-2024 Manuel Serrano, see LICENSE file        */
 ;*    -------------------------------------------------------------    */
 ;*    The emission of cop code.                                        */
 ;*=====================================================================*/
@@ -103,8 +103,8 @@
 ;*    emit-cop ::catom ...                                             */
 ;*---------------------------------------------------------------------*/
 (define-method (emit-cop cop::catom)
-   (with-access::catom cop (value)
-      (emit-atom-value value)
+   (with-access::catom cop (value type)
+      (emit-atom-value value type)
       #t))
 
 ;*---------------------------------------------------------------------*/
@@ -182,7 +182,7 @@
       (if c-exp?
 	  (begin
 	     (if (null? cops)
-		 (emit-atom-value #unspecified)
+		 (emit-atom-value #unspecified *unspec*)
 		 (begin
 		    (display "( " *c-port*)
 		    (trace cgen (display "/* cop-csequence */" *c-port*))
@@ -244,11 +244,8 @@
 ;*---------------------------------------------------------------------*/
 (define-method (emit-cop cop::csetq)
    (with-access::csetq cop (var value loc)
-      ;; we first emit a location for this node
       (emit-bdb-loc loc)
       (emit-cop var)
-      ;; don't omit to put space sourrounding `=' otherwise
-      ;; it could become an ambiguous assignement (e.g. x=-1).
       (display " = " *c-port*)
       (emit-cop value)
       #t))
@@ -355,6 +352,19 @@
 	     (emit-cop (cfuncall-fun cop))
 	     (display "))(" *c-port*))))
 
+   (define (call-cast cop)
+      (unless (or (eq? (cfuncall-type cop) *obj*)
+		  (equal? "obj_t" (type-name (cfuncall-type cop))))
+	 (display "(" *c-port*)
+	 (display (type-name (cfuncall-type cop)) *c-port*)
+	 (display ")" *c-port*)))
+   
+   (define (same-varc? x y)
+      (when (and (isa? x varc) (isa? y varc))
+	 (with-access::varc x ((xvariable variable))
+	    (with-access::varc y ((yvariable variable))
+	       (eq? xvariable yvariable)))))
+
    (labels ((emit-extra-light-cfuncall (cop)
                (let ((actuals (cfuncall-args cop)))
 		  (emit-cop (cfuncall-fun cop))
@@ -447,15 +457,37 @@
 			    (display ", " *c-port*)
 			    (loop (cdr actuals)))))))
 	    (emit-stdc-regular-cfuncall (cop)
-	       (begin
-		  (display "(VA_PROCEDUREP( " *c-port*)
-		  (emit-cop (cfuncall-fun cop))
-		  (display " ) ? " *c-port*)
-		  (emit-regular-cfuncall/strict-va cop)
-		  (display " : " *c-port*)
-		  (emit-regular-cfuncall/strict-fx cop)
-		  (display " )" *c-port*)
-		  #t)))
+	       (let* ((actuals (cfuncall-args cop))
+		      (fun (cfuncall-fun cop))
+		      (len (length actuals)))
+		  (if (or (>fx len 32) (not (same-varc? fun (car actuals))))
+		      (begin
+			 (call-cast cop)
+			 (display "(VA_PROCEDUREP( " *c-port*)
+			 (emit-cop (cfuncall-fun cop))
+			 (display " ) ? " *c-port*)
+			 (emit-regular-cfuncall/strict-va cop)
+			 (display " : " *c-port*)
+			 (emit-regular-cfuncall/strict-fx cop)
+			 (display " )" *c-port*)
+			 #t)
+		      (begin
+			 (call-cast cop)
+			 (display "BGL_PROCEDURE_CALL" *c-port*)
+			 (display (-fx len 2) *c-port*)
+			 (display "(" *c-port*)
+			 (emit-cop fun)
+			 ;; actuals are never empty because there is always
+			 ;; the function and EOA.
+			 (let loop ((args (cdr actuals)))
+			    (if (null? (cdr args))
+				(begin
+				   (display ")" *c-port*)
+				   #t)
+				(begin
+				   (display ", " *c-port*)
+				   (emit-cop (car args))
+				   (loop (cdr args))))))))))
       (emit-bdb-loc (cop-loc cop))
       (case (cfuncall-strength cop)
 	 ((elight)
@@ -463,7 +495,7 @@
 	 ((light)
 	  (emit-light-cfuncall cop))
 	 (else
-	  (if *stdc*
+	  (if #t
 	      (emit-stdc-regular-cfuncall cop)
 	      (emit-regular-cfuncall/eoa cop))))))
 
@@ -609,7 +641,7 @@
 		(for-each (lambda (t)
 			     (unless (memq t seen)
 				(display "case " *c-port*)
-				(emit-atom-value t)
+				(emit-atom-value t (cop-type test))
 				(display " : " *c-port*)
 				(newline *c-port*)))
 		   (car clause))
@@ -628,14 +660,20 @@
    (with-access::cmake-box cop (value loc stackable)
       (emit-bdb-loc loc)
       (if (local? stackable)
-	  (begin
-	     (display "MAKE_CELL_STACK(" *c-port*)
+	  (let ((make-cell (if *optim-unsafe-cell?*
+			       "BGL_MAKE_UNSAFE_CELL_STACK"
+			       "MAKE_CELL_STACK")))
+	     (display make-cell *c-port*)
+	     (write-char #\( *c-port*)
 	     (emit-cop value)
 	     (write-char #\, *c-port*)
 	     (display (variable-name stackable) *c-port*)
 	     (write-char #\) *c-port*))
-	  (begin
-	     (display "MAKE_CELL(" *c-port*)
+	  (let ((make-cell (if *optim-unsafe-cell?*
+			       "BGL_MAKE_UNSAFE_CELL"
+			       "MAKE_CELL")))
+	     (display make-cell *c-port*)
+	     (write-char #\( *c-port*)
 	     (emit-cop value)
 	     (write-char #\) *c-port*)))
       #t))
@@ -644,25 +682,39 @@
 ;*    emit-cop ::cbox-ref ...                                          */
 ;*---------------------------------------------------------------------*/
 (define-method (emit-cop cop::cbox-ref)
-   (with-access::cbox-ref cop (var loc)
-      (emit-bdb-loc loc)
-      (display "CELL_REF(" *c-port*)
-      (emit-cop var)
-      (write-char #\) *c-port*)
-      #t))
+   (with-access::cbox-ref cop (var loc type)
+      (let ((cell-ref (if *optim-unsafe-cell?*
+			  "BGL_UNSAFE_CELL_REF"
+			  "CELL_REF")))
+	 (emit-bdb-loc loc)
+	 (unless (eq? type *obj*)
+	    (display "((" *c-port*)
+	    (display (type-name type) *c-port*)
+	    (display ")" *c-port*))
+	 (display cell-ref *c-port*)
+	 (write-char #\( *c-port*)
+	 (emit-cop var)
+	 (if (eq? type *obj*)
+	     (write-char #\) *c-port*)
+	     (display "))" *c-port*))
+	 #t)))
 
 ;*---------------------------------------------------------------------*/
 ;*    emit-cop ::cbox-set! ...                                         */
 ;*---------------------------------------------------------------------*/
 (define-method (emit-cop cop::cbox-set!)
    (with-access::cbox-set! cop (var value loc)
-      (emit-bdb-loc loc)
-      (display "CELL_SET(" *c-port*)
-      (emit-cop var)
-      (display ", " *c-port*)
-      (emit-cop value)
-      (write-char #\) *c-port*)
-      #t))
+      (let ((cell-set (if *optim-unsafe-cell?*
+			  "BGL_UNSAFE_CELL_SET"
+			  "CELL_SET")))
+	 (emit-bdb-loc loc)
+	 (display cell-set *c-port*)
+	 (write-char #\( *c-port*)
+	 (emit-cop var)
+	 (display ", " *c-port*)
+	 (emit-cop value)
+	 (write-char #\) *c-port*)
+	 #t)))
 
 ;*---------------------------------------------------------------------*/
 ;*    emit-cop ::cset-ex-it ...                                        */
@@ -670,14 +722,14 @@
 (define-method (emit-cop cop::cset-ex-it)
    (with-access::cset-ex-it cop (exit jump-value body loc)
       (emit-bdb-loc loc)
-      (display "if( SET_EXIT(" *c-port*)
+      (display "if (SET_EXIT(" *c-port*)
       (emit-cop exit)
-      (display " ) ) { " *c-port*)
+      (display ")) { " *c-port*)
       (trace cgen (display "/* cop-cset-ex-it */" *c-port*))
       (when (emit-cop jump-value) (display ";" *c-port*))
       (emit-bdb-loc loc)
       (display "} else {\n" *c-port*)
-      (display "#if( SIGSETJMP_SAVESIGS == 0 )\n" *c-port*)
+      (display "#if (SIGSETJMP_SAVESIGS == 0)\n" *c-port*)
       (display "  // MS: CARE 5 jan 2021: see runtime/Clib/csystem.c\n" *c-port*)
       (display "  // bgl_restore_signal_handlers();\n" *c-port*)
       (display "#endif\n" *c-port*)
@@ -693,7 +745,7 @@
 (define-method (emit-cop cop::cjump-ex-it)
    (with-access::cjump-ex-it cop (exit value loc)
       (emit-bdb-loc loc)
-      (display "JUMP_EXIT( " *c-port*)
+      (display "JUMP_EXIT(" *c-port*)
       (emit-cop exit)
       (write-char #\, *c-port*)
       (emit-cop value)

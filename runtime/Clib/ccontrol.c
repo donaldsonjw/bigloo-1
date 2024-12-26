@@ -3,7 +3,7 @@
 /*    -------------------------------------------------------------    */
 /*    Author      :  Manuel Serrano                                    */
 /*    Creation    :  Mon Apr 17 13:16:31 1995                          */
-/*    Last change :  Fri Dec  8 12:55:37 2023 (serrano)                */
+/*    Last change :  Thu Nov 14 18:28:19 2024 (serrano)                */
 /*    -------------------------------------------------------------    */
 /*    Closure allocations.                                             */
 /*=====================================================================*/
@@ -21,11 +21,11 @@ extern obj_t make_string_sans_fill(long);
 /*---------------------------------------------------------------------*/
 BGL_RUNTIME_DEF
 obj_t
-bgl_make_procedure(obj_t entry, int arity, int size) {
+bgl_make_procedure(function_t entry, int arity, int size) {
    if (arity >= 0)
-      return make_fx_procedure((obj_t (*)())entry, arity, size);
+      return make_fx_procedure(entry, arity, size);
    else
-      return make_va_procedure((obj_t (*)())entry, arity, size);
+      return make_va_procedure(entry, arity, size);
 }
 
 /*---------------------------------------------------------------------*/
@@ -58,7 +58,7 @@ bgl_dup_procedure(obj_t proc) {
 /*---------------------------------------------------------------------*/
 obj_t
 bgl_init_fx_procedure(obj_t proc, obj_t (*entry)(), int arity, int size) {
-   if (size > (1 << HEADER_SIZE_BIT_SIZE)) {
+   if (size >= BGL_HEADER_MAX_SIZE) {
       C_FAILURE("make-fx-procedure", "Environment to large", BINT(size));
    } else {
       return BGL_INIT_FX_PROCEDURE(proc, entry, arity, size);
@@ -71,8 +71,8 @@ bgl_init_fx_procedure(obj_t proc, obj_t (*entry)(), int arity, int size) {
 /*---------------------------------------------------------------------*/
 BGL_RUNTIME_DEF
 obj_t
-make_fx_procedure(obj_t (*entry)(), int arity, int size) {
-   if (size > (1 << HEADER_SIZE_BIT_SIZE)) {
+make_fx_procedure(function_t entry, int arity, int size) {
+   if (size >= BGL_HEADER_MAX_SIZE) {
       C_FAILURE("make-fx-procedure", "Environment to large", BINT(size));
    } else {
       obj_t a_tproc = GC_MALLOC(BGL_PROCEDURE_BYTE_SIZE(size));
@@ -86,15 +86,15 @@ make_fx_procedure(obj_t (*entry)(), int arity, int size) {
 /*---------------------------------------------------------------------*/
 BGL_RUNTIME_DEF
 obj_t
-make_va_procedure(obj_t (*entry)(), int arity, int size) {
+make_va_procedure(function_t entry, int arity, int size) {
 
-   if (size > (1 << HEADER_SIZE_BIT_SIZE)) {
+   if (size > BGL_HEADER_MAX_SIZE) {
       C_FAILURE("make-va-procedure", "Environment to large", BINT(size));
    } else {
       int byte_size = PROCEDURE_SIZE + ((size-1) * OBJ_SIZE);
       obj_t a_tproc = GC_MALLOC(byte_size);
 	      
-      a_tproc->procedure.header = MAKE_HEADER(PROCEDURE_TYPE, size);
+      a_tproc->procedure.header = BGL_MAKE_HEADER(PROCEDURE_TYPE, size);
       a_tproc->procedure.entry = (obj_t (*)())va_generic_entry; 
       a_tproc->procedure.va_entry = entry;
       a_tproc->procedure.attr = BUNSPEC;
@@ -291,60 +291,59 @@ va_generic_entry(obj_t proc, ...) {
 
    va_end(argl);
 
-#define CALL(proc) ((obj_t (*)())PROCEDURE_VA_ENTRY(proc))      
    switch(arity) {
-      case -1  : return ((obj_t (*)(obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, optional);
-      case -2  : return ((obj_t (*)(obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], optional);
-      case -3  : return ((obj_t (*)(obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], optional);
-      case -4  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -1  : return ((obj_t (*)(obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, optional);
+      case -2  : return ((obj_t (*)(obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], optional);
+      case -3  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], optional);
+      case -4  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                       optional);
-      case -5  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -5  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], optional);
-      case -6  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -6  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], arg[4], optional);
-      case -7  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -7  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], arg[4], arg[5],
                                      optional);
-      case -8  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -8  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], arg[4], arg[5],
                                      arg[6], optional);
-      case -9  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -9  : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], arg[4], arg[5],
                                      arg[6], arg[7], optional);
-      case -10 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -10 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], arg[4], arg[5],
                                      arg[6], arg[7], arg[8],
                                      optional);
-      case -11 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -11 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], arg[4], arg[5],
                                      arg[6], arg[7], arg[8],
                                      arg[9], optional);
-      case -12 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -12 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], arg[4], arg[5],
                                      arg[6], arg[7], arg[8],
                                      arg[9], arg[10], optional);
-      case -13 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -13 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], arg[4], arg[5],
                                      arg[6], arg[7], arg[8],
                                      arg[9], arg[10], arg[11],
                                      optional);
-      case -14 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -14 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], arg[4], arg[5],
                                      arg[6], arg[7], arg[8],
                                      arg[9], arg[10], arg[11],
                                      arg[12], optional);
-      case -15 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -15 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], arg[4], arg[5],
                                      arg[6], arg[7], arg[8],
                                      arg[9], arg[10], arg[11],
                                      arg[12], arg[13], optional);
-      case -16 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -16 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], arg[4], arg[5],
                                      arg[6], arg[7], arg[8],
                                      arg[9], arg[10], arg[11],
                                      arg[12], arg[13], arg[14],
                                      optional);
-      case -17 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
+      case -17 : return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, arg[0], arg[1], arg[2],
                                      arg[3], arg[4], arg[5],
                                      arg[6], arg[7], arg[8],
                                      arg[9], arg[10], arg[11],
@@ -399,74 +398,74 @@ bgl_va_stack_entry(obj_t proc, ...) {
    va_end(argl);
    
    switch(arity) {
-      case -1: return ((obj_t (*)(obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -1: return ((obj_t (*)(obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, optional);
-      case -2: return ((obj_t (*)(obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -2: return ((obj_t (*)(obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], optional);
-      case -3: return ((obj_t (*)(obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -3: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], optional);
-      case -4: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -4: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  optional);
-      case -5: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -5: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  arg[3], optional);
-      case -6: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -6: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  arg[3], arg[4], optional);
-      case -7: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -7: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  arg[3], arg[4], arg[5],
 	  optional);
-      case -8: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -8: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  arg[3], arg[4], arg[5],
 	  arg[6], optional);
-      case -9: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -9: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  arg[3], arg[4], arg[5],
 	  arg[6], arg[7], optional);
-      case -10: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -10: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  arg[3], arg[4], arg[5],
 	  arg[6], arg[7], arg[8],
 	  optional);
-      case -11: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -11: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	       arg[3], arg[4], arg[5],
 	       arg[6], arg[7], arg[8],
 	  arg[9], optional);
-      case -12: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -12: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  arg[3], arg[4], arg[5],
 	  arg[6], arg[7], arg[8],
 	  arg[9], arg[10], optional);
-      case -13: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -13: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  arg[3], arg[4], arg[5],
 	  arg[6], arg[7], arg[8],
 	  arg[9], arg[10], arg[11],
 	  optional);
-      case -14: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -14: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  arg[3], arg[4], arg[5],
 	  arg[6], arg[7], arg[8],
 	  arg[9], arg[10], arg[11],
 	  arg[12], optional);
-      case -15: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -15: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  arg[3], arg[4], arg[5],
 	  arg[6], arg[7], arg[8],
 	  arg[9], arg[10], arg[11],
 	  arg[12], arg[13], optional);
-      case -16: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -16: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  arg[3], arg[4], arg[5],
 	  arg[6], arg[7], arg[8],
 	  arg[9], arg[10], arg[11],
 	  arg[12], arg[13], arg[14],
 	  optional);
-      case -17: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, ...))PROCEDURE_VA_ENTRY(proc))
+      case -17: return ((obj_t (*)(obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))
 	 (proc, arg[0], arg[1], arg[2],
 	  arg[3], arg[4], arg[5],
 	  arg[6], arg[7], arg[8],
@@ -511,7 +510,7 @@ opt_generic_entry(obj_t proc, ...) {
 #endif   
 
 #if (!defined(TAG_VECTOR))
-   args->vector.header = MAKE_HEADER(VECTOR_TYPE, byte_size);
+   args->vector.header = BGL_MAKE_HEADER(VECTOR_TYPE, byte_size);
 #endif		
    args->vector.length = len;
 
@@ -523,7 +522,7 @@ opt_generic_entry(obj_t proc, ...) {
    va_end(argl);
 
    /* jump to the function */
-   res = ((obj_t (*)(obj_t, ...))PROCEDURE_VA_ENTRY(proc))(proc, args);
+   res = ((obj_t (*)(obj_t, obj_t))PROCEDURE_VA_ENTRY(proc))(proc, args);
 
 #if (__APPLE__ == 1  && __APPLE_CC__ >= 6000)
    free(CVECTOR(args));

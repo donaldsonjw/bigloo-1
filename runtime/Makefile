@@ -3,8 +3,8 @@
 #*    -------------------------------------------------------------    */
 #*    Author      :  Manuel Serrano                                    */
 #*    Creation    :  Tue Mar 21 08:14:18 1995                          */
-#*    Last change :  Sat Aug 27 17:03:15 2022 (serrano)                */
-#*    Copyright   :  1995-2022 Manuel Serrano, see LICENSE file        */
+#*    Last change :  Wed Nov 27 12:30:01 2024 (serrano)                */
+#*    Copyright   :  1995-2024 Manuel Serrano, see LICENSE file        */
 #*    -------------------------------------------------------------    */
 #*    The (gnu) makefile to build the Bigloo's library.                */
 #*=====================================================================*/
@@ -55,8 +55,7 @@ LIBSUFFIX	=
 BHEAPFLAGS	= $(BOOTFLAGS) $(BFEATUREFLAGS) \
                   -unsafe -q -mkheap -mklib -s -no-hello
 #*--- Bigloo, common --------------------------------------------------*/
-#BCOMMONFLAGS	= $(BFLAGS) $(BOOTFLAGS) +rm -lib-dir $(BOOTLIBDIR)
-BCOMMONFLAGS	= $(BFLAGS) $(BOOTFLAGS) -rm -copt -w -lib-dir $(BOOTLIBDIR)
+BCOMMONFLAGS	= $(BFLAGS) $(BOOTFLAGS) +rm
 #*--- Bigloo, safe ----------------------------------------------------*/
 BSAFEFLAGS	= -srfi bigloo-safe $(BCOMMONFLAGS) \
                   -O3 -mklib -cc $(CC) -fsharing \
@@ -183,7 +182,7 @@ endif
 JLIB		= foreign buffer configure stackwriter\
                   bbool output_string_port output_procedure_port \
 		  bchar input_console_port pair \
-		  bexception input_file_port \
+		  bexception input_file_port  input_mmap_port\
                   procedure \
 		  bignum bint input_port real \
 		  bllong belong input_string_port input_pipe_port rest \
@@ -296,15 +295,10 @@ C_SCM_READ	= $(READ:%=Read/%.c)
 #*---------------------------------------------------------------------*/
 UNSAFE		= intext hmac md5 crc16 sha1 sha2 gunzip tar kmp \
                   base64 bignumber aes rsa url http crc uuid ftp \
-                  bm
+                  bm ssr regexp
 
-REGEXP		= pregexp pcre regex
- 
 SCM_UNSAFE	= $(UNSAFE:%=Unsafe/%.scm)
 C_SCM_UNSAFE	= $(UNSAFE:%=Unsafe/%.c)
-
-SCM_REGEXP	= $(REGEXP:%=Unsafe/%.scm)
-C_SCM_REGEXP	= $(REGEXP:%=Unsafe/%.c)
 
 #*---------------------------------------------------------------------*/
 #*    The Lalr compiler objects                                        */
@@ -324,7 +318,7 @@ SCM_SYS_SRC	= $(SCM_READ) $(SCM_RGC) $(SCM_PP) \
 #*---------------------------------------------------------------------*/
 #*    Src files                                                        */
 #*---------------------------------------------------------------------*/
-SRC_FILES	= $(SCM_USR_SRC) $(SCM_SYS_SRC) $(SCM_REGEXP_SRC) \
+SRC_FILES	= $(SCM_USR_SRC) $(SCM_SYS_SRC) $(SCM_UNSAFE_SRC) \
                   $(C_CLIB) \
                   $(JAVA_JLIB:%/configure.java=) \
                   Mlib/mach_dep.c \
@@ -351,8 +345,7 @@ INCLUDE_FILE	= Include/bigloo.h Include/bigloo_saw.h \
 OBJECTS		= $(C_CLIB:%.c=objs/$(OBJDIR_USR)/%.o) \
                   objs/$(OBJDIR_SYS)/Mlib/mach_dep.o \
                   $(SCM_SYS_SRC:%.scm=objs/$(OBJDIR_SYS)/%.o) \
-                  $(SCM_USR_SRC:%.scm=objs/$(OBJDIR_USR)/%.o) \
-		  objs/$(OBJDIR_SYS)/Unsafe/regexp.o
+                  $(SCM_USR_SRC:%.scm=objs/$(OBJDIR_USR)/%.o)
 
 GCSTDOBJECTS	= $(GCSTDOBJ:%.o=objs/$(OBJDIR_SYS)/%.o)
 
@@ -360,17 +353,13 @@ GCSTDOBJECTS	= $(GCSTDOBJ:%.o=objs/$(OBJDIR_SYS)/%.o)
 #*    JVM class files                                                  */
 #*---------------------------------------------------------------------*/
 CLASSES		= $(SCM_SYS_SRC:%.scm=objs/$(CLASSDIR_SYS)/bigloo/runtime/%.class) \
-                  $(SCM_USR_SRC:%.scm=objs/$(CLASSDIR_USR)/bigloo/runtime/%.class) \
-	          objs/$(CLASSDIR_SYS)/bigloo/runtime/Unsafe/regexp.class
+                  $(SCM_USR_SRC:%.scm=objs/$(CLASSDIR_USR)/bigloo/runtime/%.class)
 
 #*---------------------------------------------------------------------*/
 #*    C Object files for the distribution                              */
 #*---------------------------------------------------------------------*/
 C_OBJECTS	= $(SCM_SYS_SRC:%.scm=objs/$(OBJDIR_SYS)/%.c) \
-                  $(SCM_USR_SRC:%.scm=objs/$(OBJDIR_USR)/%.c) \
-		  objs/$(OBJDIR_SYS)/Unsafe/pregexp.c \
-		  objs/$(OBJDIR_SYS)/Unsafe/pcre.c \
-		  objs/$(OBJDIR_SYS)/Unsafe/regex.c
+                  $(SCM_USR_SRC:%.scm=objs/$(OBJDIR_USR)/%.c)
 
 #*---------------------------------------------------------------------*/
 #*    Population                                                       */
@@ -378,7 +367,6 @@ C_OBJECTS	= $(SCM_SYS_SRC:%.scm=objs/$(OBJDIR_SYS)/%.c) \
 POPULATION_SI	= $(SRC_FILES) \
                   Makefile \
                   Llib/make_lib.scm \
-		  Ieee/bignum.sch \
 		  Lalr/lalr.sch \
 		  Rgc/rgc-node.sch \
 		  Eval/byte-code.sch \
@@ -418,7 +406,6 @@ all-jvm: heap-jvm libs-jvm
 #*    distrib                                                          */
 #*---------------------------------------------------------------------*/
 distrib:
-	cp Unsafe/pcre.scm Unsafe/regexp.scm
 	$(MAKE) DISTRIB=true dodistrib
 
 dodistrib: .afile
@@ -451,15 +438,13 @@ heap: heap-c
 heap-c: .afile includes
 	$(RM) -f $(BOOTLIBDIR)/$(HEAPC_FILE)
 	$(BIGLOO) $(BHEAPFLAGS) $(EFLAGS) -L $(BOOTLIBDIR) Llib/make_lib.scm -heap $(HEAPC_FILE)
-	@ echo "Heap Done..."
-	@ echo "-------------------------------"
+	@ echo "\e[1;35m$(HEAPC_FILE)\e[0m  done."
 
-heap-jvm: .afile .jfile includes
+heap-jvm: .afile .jfile includes lib-jvm_u
 	$(RM) -f $(BOOTLIBDIR)/$(HEAPJVM_FILE)
 	$(BIGLOO) -target jvm -jfile .jfile -L $(BOOTLIBDIR) $(BHEAPFLAGS) \
                   $(EFLAGS) Llib/make_lib.scm -heap $(HEAPJVM_FILE)
-	@ echo "Heap Done..."
-	@ echo "-------------------------------"
+	@ echo "\e[1;35m$(HEAPJVM_FILE)\e[0m  done."
 
 #*---------------------------------------------------------------------*/
 #*    Bigloo C libraries compilation                                   */
@@ -532,8 +517,7 @@ $(BOOTLIBDIR)/lib$(LIBRARYNAME)$(LIBSUFFIX)-$(RELEASE).a: $(OBJECTS) $(GCSTDOBJE
 	$(AR) $(ARFLAGS) \
                 $(BOOTLIBDIR)/lib$(LIBRARYNAME)$(LIBSUFFIX)-$(RELEASE).a $^
 	$(RANLIB) $(BOOTLIBDIR)/lib$(LIBRARYNAME)$(LIBSUFFIX)-$(RELEASE).a
-	@ echo "$@ done..."
-	@ echo "-------------------------------"
+	@ echo "\e[1;36m$(@)\e[0m done."
 
 one-share-lib-c: $(BOOTLIBDIR)/lib$(LIBRARYNAME)$(LIBSUFFIX)$(LIBSUFFIXTHREAD)-$(RELEASE).$(SHAREDSUFFIX)
 
@@ -544,18 +528,19 @@ $(BOOTLIBDIR)/lib$(LIBRARYNAME)$(LIBSUFFIX)$(LIBSUFFIXTHREAD)-$(RELEASE).$(SHARE
              LDOPTS="$(LDOPTS) $(LDBUILDOPTS)" \
              BIGLOOLIB= \
              SONAME=lib$(LIBRARYNAME)$(LIBSUFFIX)$(LIBSUFFIXTHREAD)-$(RELEASE).$(SHAREDSUFFIX)
+	@ echo "\e[1;37m$(@)\e[0m done."
 
 #*---------------------------------------------------------------------*/
 #*    Bigloo JVM libraries compilation                                 */
 #*---------------------------------------------------------------------*/
 .PHONY: lib-jvm lib-jvm_s lib-jvm_u lib-jvm_p libs-jvm
 
-libs-jvm:
+libs-jvm: .jfile
 	@ $(MAKE) lib-jvm_u
 	@ $(MAKE) lib-jvm_s
 
 lib-jvm: lib-jvm_s
-lib-jvm_s: includes
+lib-jvm_s: .jfile includes
 	$(MAKE) one-lib-jvm \
                 BFLAGS_SYS="$(BUNSAFEFLAGS) $(BJSAFEFLAGS)" \
                 BFLAGS_USR="$(BSAFEFLAGS) $(BJSAFEFLAGS)" \
@@ -563,14 +548,14 @@ lib-jvm_s: includes
                 LIBSUFFIX=_s
 
 
-lib-jvm_u: includes
+lib-jvm_u: .jfile includes
 	$(MAKE) one-lib-jvm \
                 BFLAGS_SYS="$(BUNSAFEFLAGS)" \
                 BFLAGS_USR="$(BUNSAFEFLAGS)" \
                 CLASSDIR_USR=class_u CLASSDIR_SYS=class_u \
                 LIBSUFFIX=_u
 
-lib-jvm_p: includes
+lib-jvm_p: .jfile includes
 	$(MAKE) one-lib-jvm \
                 BFLAGS_SYS="$(BUNSAFEPFLAGS)" \
                 BFLAGS_USR="$(BUNSAFEPFLAGS)" \
@@ -585,29 +570,27 @@ $(BOOTLIBDIR)/$(LIBRARYNAME)$(LIBSUFFIX).zip: $(CLASSES) class$(LIBSUFFIX)/jlib 
 	 $(ZIP) -q $(ZFLAGS) $(BOOTLIBDIR)/$(LIBRARYNAME)$(LIBSUFFIX).zip \
                  $(SCM_SYS_SRC:%.scm=bigloo/runtime/%.class) \
                  $(SCM_USR_SRC:%.scm=bigloo/runtime/%.class) \
-		 bigloo/runtime/Unsafe/regexp.class \
                  bigloo/runtime/*/_KBGl_*.class \
                  $(JAVA_JLIB:Jlib/%.java=bigloo/%.class) \
                  $(JAVA_JLIB:Jlib/%.java=bigloo/%[$$]*.class)) || exit 1
-	@ echo "$(LIBRARYNAME)$(LIBSUFFIX).zip done..."
-	@ echo "-------------------------------"
+	@ echo "\e[1;38m$(@)\e[0m done."
 
 #*---------------------------------------------------------------------*/
 #*    Bigloo JAS libraries compilation                                 */
 #*---------------------------------------------------------------------*/
 .PHONY: jlib
 
-class_s/jlib:
+class_s/jlib: $(CLASSES)
 	(cd Jlib && \
          $(JAVAC) -classpath ../objs/class_s -d ../objs/class_s \
                   $(JCFLAGS) $(JLIB_SRC))
 
-class_u/jlib:
+class_u/jlib: $(CLASSES)
 	(cd Jlib && \
          $(JAVAC) -classpath ../objs/class_u -d ../objs/class_u \
                   $(JCFLAGS) $(JLIB_SRC))
 
-class_p/jlib:
+class_p/jlib: $(CLASSES)
 	(cd Jlib && \
          $(JAVAC) -classpath ../objs/class_p -d ../objs/class_p \
                   $(JCFLAGS) $(JLIB_SRC))
@@ -638,16 +621,18 @@ distlibs:
 distlib_u:
 	$(MAKE) one-distlib \
 		BIGLOO=$(BIGLOO) \
-                BFLAGS_SYS="$(BUNSAFEFLAGS)" \
-                BFLAGS_USR="$(BUNSAFEFLAGS)" \
+                BFEATUREFLAGS= \
+                BFLAGS_SYS="$(BUNSAFEFLAGS) $(BDISTRIBFLAGS)" \
+                BFLAGS_USR="$(BUNSAFEFLAGS) $(BDISTRIBFLAGS)" \
                 OBJDIR_USR=obj_u OBJDIR_SYS=obj_u
 
 
 distlib:
 	$(MAKE) one-distlib \
 		BIGLOO=$(BIGLOO) \
-                BFLAGS_SYS="$(BUNSAFEFLAGS)" \
-                BFLAGS_USR="$(BSAFEFLAGS)" \
+                BFEATUREFLAGS= \
+                BFLAGS_SYS="$(BUNSAFEFLAGS) $(BDISTRIBFLAGS)" \
+                BFLAGS_USR="$(BSAFEFLAGS) $(BDISTRIBFLAGS)" \
                 OBJDIR_USR=obj_s OBJDIR_SYS=obj_u
 
 one-distlib: $(C_OBJECTS)
@@ -659,7 +644,7 @@ one-distlib: $(C_OBJECTS)
 #*---------------------------------------------------------------------*/
 boot: dirs includes
 	touch .afile
-	@ $(MAKE) boot-libs
+	@ $(MAKE) boot-libs CEFLAGS=-DBGL_BOOT=1 EFLAGS="-srfi boot"
 
 boot-libs:
 	@ $(MAKE) lib-c_u SCMOBJSUFFIX="" COBJSUFFIX=%.o
@@ -830,6 +815,12 @@ objs/saw_u/$(SCMOBJSUFFIX): %.scm
 objs/saw_s/$(SCMOBJSUFFIX): %.scm
 	$(BIGLOO) $(BFEATUREFLAGS) $(BFLAGS_USR) $(SAWFLAGS) $(EFLAGS) -c $< -o $@
 
+objs/obj_u/Eval/evaluate_comp$(SCMOBJSUFFIX): Eval/evaluate_comp.scm
+	$(BIGLOO) $(BFEATUREFLAGS) $(BFLAGS_SYS) $(EFLAGS) -fno-arithmetic-overflow -c $< -o $@
+
+objs/saw_u/Eval/evaluate_comp$(SCMOBJSUFFIX): Eval/evaluate_comp.scm
+	$(BIGLOO) $(BFEATUREFLAGS) $(BFLAGS_SYS) $(SAWFLAGS) $(EFLAGS) -fno-arithmetic-overflow -c $< -o $@
+
 #*---------------------------------------------------------------------*/
 #*     .c --> .o                                                       */
 #*---------------------------------------------------------------------*/
@@ -870,6 +861,12 @@ objs/saw_s/Clib/%.o: Clib/%.c
 	$(CC) $(CSAWFLAGS) $(CEFLAGS) $(CSAFEFLAGS) $(GCINCLUDE) -c Clib/$*.c -o Clib-$(@F) && \
         mv Clib-$(@F) $@
 
+objs/obj_u/Eval/evprimop.o: objs/obj_u/Eval/evprimop.c
+	$(CC) -I$(BOOTLIBDIR) $(CUNSAFEFLAGS) $(CEFLAGS) -c $< -o $@
+
+objs/saw_u/Eval/evprimop.o: objs/saw_u/Eval/evprimop.c
+	$(CC) -I$(BOOTLIBDIR) $(CUNSAFEFLAGS) $(CSAWFLAGS) $(CEFLAGS) -c $< -o $@
+
 #*---------------------------------------------------------------------*/
 #*     .scm --> .c                                                     */
 #*---------------------------------------------------------------------*/
@@ -885,9 +882,6 @@ objs/obj_u/Unsafe/bignumber.c: Unsafe/bignumber.scm
 objs/obj_u/Eval/evprimop.c: Eval/evprimop.scm
 	$(BIGLOO) $(BFEATUREFLAGS) $(BUNSAFEFLAGS) $(EFLAGS) -cgen $< -o $@
 
-objs/obj_u/Eval/evprimop.o: objs/obj_u/Eval/evprimop.c
-	$(CC) -I$(BOOTLIBDIR) $(CUNSAFEFLAGS) $(CEFLAGS) -c $< -o $@
-
 objs/saw_u/%.c: %.scm
 	$(BIGLOO) $(BFEATUREFLAGS) $(BFLAGS_SYS) $(SAWFLAGS) $(EFLAGS) -c $< -indent -o $@
 
@@ -900,8 +894,8 @@ objs/saw_u/Unsafe/bignumber.c: Unsafe/bignumber.scm
 objs/saw_u/Eval/evprimop.c: Eval/evprimop.scm
 	$(BIGLOO) $(BFEATUREFLAGS) $(BUNSAFEFLAGS) $(SAWFLAGS) $(EFLAGS) -cgen $< -o $@
 
-objs/saw_u/Eval/evprimop.o: objs/saw_u/Eval/evprimop.c
-	$(CC) -I$(BOOTLIBDIR) $(CUNSAFEFLAGS) $(CSAWFLAGS) $(CEFLAGS) -c $< -o $@
+objs/obj_u/Eval/evaluate_comp.c: Eval/evaluate_comp.scm
+	$(BIGLOO) $(BFLAGS_USR) $(EFLAGS) -c $< -indent -fno-arithmetic-overflow -o $@
 
 #*---------------------------------------------------------------------*/
 #*    mach_dep.o                                                       */
@@ -929,6 +923,13 @@ objs/class_s/bigloo/runtime/$(SCMCLASSSUFFIX): %.scm
 
 objs/class_p/bigloo/runtime/$(SCMCLASSSUFFIX): %.scm
 	$(BIGLOO) -jvm $(BGLJFLAGS) $(BFLAGS_USR) $(EFLAGS) -c $< -o $@
+
+objs/class_s/bigloo/runtime/Eval/evaluate_comp.class: Eval/evaluate_comp.scm
+	$(BIGLOO) -jvm $(BGLJFLAGS) $(BFLAGS_SYS) $(EFLAGS) -fno-arithmetic-overflow -c $< -o $@
+
+objs/class_u/bigloo/runtime/Eval/evaluate_comp.class: Eval/evaluate_comp.scm
+	$(BIGLOO) -jvm $(BGLJFLAGS) $(BFLAGS_SYS) $(EFLAGS) -fno-arithmetic-overflow -c $< -o $@
+
 
 #*---------------------------------------------------------------------*/
 #*    objs                                                             */
@@ -1033,14 +1034,14 @@ ude: .afile .jfile
 #*---------------------------------------------------------------------*/
 afile: .afile
 .afile:
-	$(BGLAFILE) -o .afile $(SCM_USR_SRC) $(SCM_SYS_SRC) Unsafe/regexp.scm
+	$(BGLAFILE) -o .afile $(SCM_USR_SRC) $(SCM_SYS_SRC)
 
 #*---------------------------------------------------------------------*/
 #*    .jfile                                                           */
 #*---------------------------------------------------------------------*/
 jfile: .jfile
 .jfile:
-	$(BGLJFILE) -pbase $(PBASE) $(SCM_USR_SRC) $(SCM_SYS_SRC) Unsafe/regexp.scm > .jfile
+	$(BGLJFILE) -pbase $(PBASE) $(SCM_USR_SRC) $(SCM_SYS_SRC) > .jfile
 
 #*---------------------------------------------------------------------*/
 #*    Dependencies                                                     */
@@ -1049,6 +1050,8 @@ objs/obj_s/Llib/bconfigure.o: $(BOOTLIBDIR)/bigloo_config.h
 objs/obj_u/Llib/bconfigure.o: $(BOOTLIBDIR)/bigloo_config.h
 objs/obj_s/Llib/evobject.o: Llib/object.sch
 objs/obj_u/Llib/evobject.o: Llib/object.sch
+objs/obj_u/Unsafe/regexp.o: Unsafe/pcre.scm Unsafe/pregexp.scm Unsafe/regexp.scm
+objs/obj_s/Unsafe/regexp.o: Unsafe/pcre.scm Unsafe/pregexp.scm Unsafe/regexp.scm
 objs/saw_s/Llib/bconfigure.o: $(BOOTLIBDIR)/bigloo_config.h
 objs/saw_u/Llib/bconfigure.o: $(BOOTLIBDIR)/bigloo_config.h
 objs/saw_s/Llib/evobject.o: Llib/object.sch

@@ -13,6 +13,7 @@
 	   tools_shape
 	   saw_defs
 	   backend_cplib
+	   backend_backend
 	   )
    (export (global->rtl::block var::global)
 	   (local->reg::rtl_reg var::local))
@@ -370,14 +371,14 @@
 
 ;;
 (define-method (node->rtl::area e::pragma) ; ()
-   (with-access::pragma e (expr* format)
+   (with-access::pragma e (expr* format srfi0)
       (if (and (string-null? format)
 	       (pair? expr*)
 	       (null? (cdr expr*))
 	       (isa? (car expr*) var))
 	  (let ((fmt (variable-name (var-variable (car expr*)))))
-	     (call* e (instantiate::rtl_pragma (format fmt)) (cdr expr*)))
-	  (call* e (instantiate::rtl_pragma (format format)) expr*))) )
+	     (call* e (instantiate::rtl_pragma (format fmt) (srfi0 srfi0)) (cdr expr*)))
+	  (call* e (instantiate::rtl_pragma (format format) (srfi0 srfi0)) expr*))) )
 
 ;;
 (define-method (node->rtl::area e::getfield) ; ()
@@ -431,10 +432,10 @@
 
 ;;
 (define-method (node->rtl::area e::cast) ; ()
-  (with-access::cast e (arg)
-      ; CARE MANU pourquoi il y aurait des mauvais type!!
-      ; (call e (instantiate::rtl_cast (type (get-type e #f))) arg)
-      (node->rtl arg) ))
+  (with-access::cast e (arg type)
+      (if (backend-strict-type-cast (the-backend))
+	  (call e (instantiate::rtl_cast (totype type) (fromtype (get-type arg #f))) arg)
+	  (node->rtl arg) )))
 
 ;;
 (define-method (node->rtl::area e::cast-null) ; ()
