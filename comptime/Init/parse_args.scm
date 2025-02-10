@@ -1,5 +1,5 @@
 ;*=====================================================================*/
-;*    .../prgm/project/bigloo/bigloo/comptime/Init/parse_args.scm      */
+;*    serrano/prgm/project/bigloo/flt/comptime/Init/parse_args.scm     */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Sun Aug  7 11:47:46 1994                          */
@@ -1371,6 +1371,7 @@
 			    (char->integer #\0))))
 	  ((#\6)
 	   (-O3!)
+	   (set! *arithmetic-expand-flonum* #t)
 	   (set! *optim-stackable?* #t)
 	   (set! *optim-uncell?* #t)
 	   (set! *optim* (-fx (char->integer (string-ref string 0))

@@ -1,5 +1,5 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/bigloo/runtime/Llib/type.scm         */
+;*    serrano/prgm/project/bigloo/nanh/runtime/Llib/type.scm           */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Sun Jan  8 08:52:32 1995                          */
@@ -1364,12 +1364,12 @@
     ($bchar->uchar no-alloc side-effect-free nesting args-safe fail-safe (effect))
     ($ucs2->bucs2 side-effect-free nesting args-safe fail-safe (effect))
     ($bucs2->ucs2 no-alloc side-effect-free nesting args-safe fail-safe (effect))
-    ($double->real side-effect-free args-safe fail-safe (effect))
-    ($real->double no-alloc side-effect-free args-safe fail-safe (effect))
-    ($double->float no-alloc side-effect-free nesting args-safe fail-safe (effect))
-    ($float->double side-effect-free nesting args-safe fail-safe (effect))
-    ($float->real side-effect-free args-safe fail-safe (effect))
-    ($real->float side-effect-free nesting args-safe fail-safe (effect))
+    ($double->real side-effect-free fail-safe (effect))
+    ($real->double no-alloc side-effect-free fail-safe (effect))
+    ($double->float no-alloc side-effect-free nesting fail-safe (effect))
+    ($float->double side-effect-free nesting fail-safe (effect))
+    ($float->real side-effect-free fail-safe (effect))
+    ($real->float side-effect-free nesting fail-safe (effect))
     ($cobj->obj side-effect-free nesting args-safe fail-safe (effect))
     ($obj->cobj side-effect-free nesting args-safe fail-safe (effect))
     ($ubyte->char side-effect-free nesting args-safe fail-safe (effect))

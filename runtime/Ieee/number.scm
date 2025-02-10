@@ -1,5 +1,5 @@
 ;*=====================================================================*/
-;*    serrano/prgm/project/bigloo/bigloo/runtime/Ieee/number.scm       */
+;*    serrano/prgm/project/bigloo/flt/runtime/Ieee/number.scm          */
 ;*    -------------------------------------------------------------    */
 ;*    Author      :  Manuel Serrano                                    */
 ;*    Creation    :  Fri Mar 24 09:59:43 1995                          */
@@ -167,7 +167,7 @@
 	    (atan::double x . y) 
 	    (sqrt::double x) 
 	    (expt x y)
-	    (exact->inexact z)
+	    (exact->inexact::double z)
 	    (inexact->exact z)
 	    (number->string::bstring x #!optional (radix 10))
 	    (string->number ::bstring #!optional (radix 10)))
@@ -1166,7 +1166,7 @@
       ((elong? z) ($elong->flonum z))
       ((llong? z) ($llong->flonum z))
       ((bignum? z) (bignum->flonum z))
-      (else z)))
+      (else +nan.0)))
 
 ;*---------------------------------------------------------------------*/
 ;*    max int values ...                                               */
@@ -1182,11 +1182,6 @@
        (if (and (>=fl z *minintfl*) (<=fl z *maxintfl*))
 	   ($flonum->fixnum z)
 	   ($flonum->bignum z))
-       z))
-
-(define (inexact->exact-old z)
-   (if (inexact? z)
-       ($flonum->fixnum z)
        z))
  
 ;*---------------------------------------------------------------------*/
